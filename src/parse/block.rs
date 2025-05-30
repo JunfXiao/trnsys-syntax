@@ -17,8 +17,8 @@ use std::rc::Rc;
 use strum::IntoEnumIterator;
 
 pub fn parse_commented_block<'a>(
-    input: (&'a str, &'a mut ParseContext),
-) -> IResult<&'a str, Block<'a>, RError> {
+    input: (&'a str, &mut ParseContext),
+) -> IResult<&'a str, Block, RError> {
     let (input, context) = input;
 
     let (input, before) = parse_block_comment.parse(input)?;
@@ -35,8 +35,8 @@ pub fn parse_commented_block<'a>(
 }
 
 pub fn parse_block<'a>(
-    input: (&'a str, &'a mut ParseContext),
-) -> IResult<&'a str, Block<'a>, RError> {
+    input: (&'a str, &mut ParseContext),
+) -> IResult<&'a str, Block, RError> {
     let (input, context) = input;
     let (input, block_header) = complete(parse_header).parse(input)?;
     let (input, block) = Block::try_parse(input, block_header, context)?;
@@ -48,7 +48,7 @@ impl<'a> BlockParser<'a> for Version {
         input: &'a str,
         raw_header: RawHeader<'_>,
         context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         context.ensure_unique(Self::block_kind())?;
         raw_header.ensure_len(1)?;
         let version_str = raw_header.items[0].to_string();
@@ -61,7 +61,7 @@ impl<'a> BlockParser<'a> for Simulation {
         input: &'a str,
         raw_header: RawHeader,
         context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         context.ensure_unique(Self::block_kind())?;
         raw_header.ensure_len(3)?;
         let transformed = raw_header.to_vec::<f64>()?;
@@ -103,7 +103,7 @@ impl<'a> BlockParser<'a> for Tolerances {
         input: &'a str,
         raw_header: RawHeader,
         context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         context.ensure_unique(Self::block_kind())?;
         raw_header.ensure_len(2)?;
         let transformed = raw_header.to_vec::<f64>()?;
@@ -136,7 +136,7 @@ impl<'a> BlockParser<'a> for Limits {
         input: &'a str,
         raw_header: RawHeader,
         context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         context.ensure_unique(Self::block_kind())?;
 
         raw_header.ensure_len_between(2, 3)?;
@@ -187,7 +187,7 @@ impl<'a> BlockParser<'a> for NanCheck {
         input: &'a str,
         raw_header: RawHeader,
         context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         context.ensure_unique(Self::block_kind())?;
         raw_header.ensure_len(1)?;
         let [nan_check] = raw_header.to_vec::<BitBool>()?.try_into().unwrap();
@@ -202,7 +202,7 @@ impl<'a> BlockParser<'a> for OverwriteCheck {
         input: &'a str,
         raw_header: RawHeader,
         context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         context.ensure_unique(Self::block_kind())?;
         raw_header.ensure_len(1)?;
         let [overwrite_check] = raw_header.to_vec::<BitBool>()?.try_into().unwrap();
@@ -217,7 +217,7 @@ impl<'a> BlockParser<'a> for TimeReport {
         input: &'a str,
         raw_header: RawHeader,
         context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         context.ensure_unique(Self::block_kind())?;
         raw_header.ensure_len(1)?;
         let [time_report] = raw_header.to_vec::<BitBool>()?.try_into().unwrap();
@@ -226,12 +226,12 @@ impl<'a> BlockParser<'a> for TimeReport {
     }
 }
 
-impl<'a> BlockParser<'a> for Constants<'a> {
+impl<'a> BlockParser<'a> for Constants {
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
         _context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         raw_header.ensure_len(1)?;
         let [num_constants] = raw_header.to_vec::<usize>()?.try_into().unwrap();
 
@@ -244,12 +244,12 @@ impl<'a> BlockParser<'a> for Constants<'a> {
     }
 }
 
-impl<'a> BlockParser<'a> for Equations<'a> {
+impl<'a> BlockParser<'a> for Equations {
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
         context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         raw_header.ensure_len(1)?;
         let [num_equations] = raw_header.to_vec::<usize>()?.try_into().unwrap();
         let (input, expressions) = parse_equations(num_equations).parse(input)?;
@@ -280,7 +280,7 @@ impl<'a> BlockParser<'a> for Accelerate {
         input: &'a str,
         raw_header: RawHeader,
         context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         // ACCELERATE n
         // u1,o1 u2,o2 ... ui,oi .... un,on
 
@@ -337,7 +337,7 @@ impl<'a> BlockParser<'a> for Loop {
         input: &'a str,
         raw_header: RawHeader,
         context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         // It must be defined between the Simulation and End Block.
         let mut has_simulation: bool = false;
         let mut has_end: bool = false;
@@ -448,7 +448,7 @@ impl<'a> BlockParser<'a> for Dfq {
         input: &'a str,
         raw_header: RawHeader,
         context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         // DFQ k
         // k is 1, 2 or 3
         context.ensure_unique(Self::block_kind())?;
@@ -477,7 +477,7 @@ impl<'a> BlockParser<'a> for NoCheck {
         input: &'a str,
         raw_header: RawHeader,
         context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         // similar to accelerate
         // NOCHECK n
         // u1,i1 u2,i2 . . . ui,ii . . . un,in
@@ -535,7 +535,7 @@ impl<'a> BlockParser<'a> for EqSolver {
         input: &'a str,
         raw_header: RawHeader,
         context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         // EQSOLVER n
         // n: EqSolverMethod
 
@@ -566,7 +566,7 @@ impl<'a> BlockParser<'a> for Solver {
         input: &'a str,
         raw_header: RawHeader,
         context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         // SOLVER SolverMethod [optional] RF_min [optional] RF_max
 
         context.ensure_unique(Self::block_kind())?;
@@ -645,7 +645,7 @@ impl<'a> BlockParser<'a> for Assign {
         input: &'a str,
         raw_header: RawHeader,
         context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         // ASSIGN filename lu
         // lu is the logical unit number
 
@@ -667,7 +667,7 @@ impl<'a> BlockParser<'a> for Designate {
         input: &'a str,
         raw_header: RawHeader,
         context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         // DESIGNATE filename lu
         // lu is the logical unit number
         raw_header.ensure_len(2)?;
@@ -685,7 +685,7 @@ impl<'a> BlockParser<'a> for Include {
         input: &'a str,
         raw_header: RawHeader,
         _context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         // INCLUDE filename
         raw_header.ensure_len(1)?;
         let filename = raw_header.items[0].to_string();
@@ -694,12 +694,12 @@ impl<'a> BlockParser<'a> for Include {
     }
 }
 
-impl<'a> BlockParser<'a> for Unit<'a> {
+impl<'a> BlockParser<'a> for Unit {
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader<'a>,
         _context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         // UNIT n TYPE m Comment
         // n is the unit number
         // m is the type number
@@ -768,7 +768,7 @@ impl<'a> BlockParser<'a> for Width {
         input: &'a str,
         raw_header: RawHeader,
         _context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         // WIDTH n
         // 72 <= n <= 132
 
@@ -793,7 +793,7 @@ impl<'a> BlockParser<'a> for NoList {
         input: &'a str,
         raw_header: RawHeader,
         _context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
 
         raw_header.ensure_len(0)?;
 
@@ -806,7 +806,7 @@ impl<'a> BlockParser<'a> for List {
         input: &'a str,
         raw_header: RawHeader,
         _context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         // LIST
 
         raw_header.ensure_len(0)?;
@@ -820,7 +820,7 @@ impl<'a> BlockParser<'a> for Map {
         input: &'a str,
         raw_header: RawHeader,
         _context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         raw_header.ensure_len(0)?;
 
         Ok((input, Map().into()))
@@ -832,7 +832,7 @@ impl<'a> BlockParser<'a> for End {
         input: &'a str,
         raw_header: RawHeader,
         _context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         raw_header.ensure_len(0)?;
         let block = End {};
         Ok((input, block.into()))
@@ -844,7 +844,7 @@ impl<'a> BlockParser<'a> for CSummarize {
         input: &'a str,
         raw_header: RawHeader,
         _context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         // CSUMMARIZE EqnName "description"
         raw_header.ensure_len(2)?;
         let eqn_name = raw_header.items[0].to_string();
@@ -859,7 +859,7 @@ impl<'a> BlockParser<'a> for ESummarize {
         input: &'a str,
         raw_header: RawHeader,
         _context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError> {
+    ) -> IResult<&'a str, Commented<Self>, RError> {
         // ESUMMARIZE EqnName "description"
         raw_header.ensure_len(2)?;
         let eqn_name = raw_header.items[0].to_string();

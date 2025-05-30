@@ -59,8 +59,8 @@ impl Display for GlobalId {
 }
 
 #[derive(Default, Debug)]
-pub struct ParseContext<'a> {
-    pub prev_blocks: Vec<Rc<RefCell<Block<'a>>>>,
+pub struct ParseContext {
+    pub prev_blocks: Vec<Rc<RefCell<Block>>>,
     /// The hashmap of dependencies.
     /// 
     /// The key is the id of the block, and the value is a set of ids that this block depends on.
@@ -70,7 +70,7 @@ pub struct ParseContext<'a> {
 
 
 
-impl<'a> ParseContext<'a> {
+impl<'a> ParseContext {
 
     pub fn new() -> Self {
         let mut reserved = HashSet::new();

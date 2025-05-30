@@ -18,7 +18,7 @@ use std::fmt::{Debug, Display};
 pub struct RawHeader<'a, K = BlockKind> {
     pub block_kind: K,
     pub items: Vec<StrRef<'a>>,
-    pub comments: Comments<'a>,
+    pub comments: Comments,
 }
 
 impl<'a, K> RawHeader<'a, K>
@@ -178,9 +178,9 @@ where
                 block_kind,
                 items: converted_items,
                 comments: Comments{
-                    comment_pre: pre_comments.map(|v| v.into_iter().map(Into::into).collect()),
-                    comment_inline: comment.map(|s| s.into()),
-                    comment_post: post_comments.map(|v| v.into_iter().map(Into::into).collect()),
+                    comment_pre: pre_comments.map(|v| v.into_iter().map(|i|i.to_string()).collect()),
+                    comment_inline: comment.map(|s| s.to_string()),
+                    comment_post: post_comments.map(|v| v.into_iter().map(|i|i.to_string()).collect()),
                 },
             },
         ))

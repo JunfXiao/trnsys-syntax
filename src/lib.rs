@@ -1,60 +1,53 @@
-use nom::Parser;
 use std::cell::RefCell;
 pub mod ast;
 pub mod error;
 pub mod parse;
 
 use crate::error::{ParseResult, RError};
-use crate::parse::{Block, ParseContext, parse_commented_block};
-use error_stack::{Report, ResultExt};
-use nom::combinator::all_consuming;
-use nom::multi::many;
+use crate::parse::{ ParseContext, parse_commented_block};
+use error_stack::{Report};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 /// High-level representation of a TRNSYS deck file
-pub struct TrnsysFile<'a> {
+pub struct TrnsysFile {
     /// The parsed Abstract Syntax Tree
-    pub blocks: Vec<Rc<RefCell<Block<'a>>>>,
+    pub ctx: ParseContext,
     /// The file path if loaded from the disk
     pub path: Option<PathBuf>,
 }
 
 
 
-impl<'a> TrnsysFile<'a> {
-    
-    
+impl TrnsysFile {
     
     /// Parse a TRNSYS deck file from a string
     pub fn parse(mut input: &str) -> Result<Self, RError> {
-        // let mut parse_context = ParseContext::new();
-        // 
-        // while !input.trim().is_empty() {
-        //     let context_ref = &mut parse_context;
-        //     let (remaining, block) = parse_commented_block((input, context_ref))
-        //         .map_err(|e| RError::from(e)
-        //             .attach_printable("Failed to parse TRNSYS block"))?;
-        //     context_ref.prev_blocks.push(Rc::new(RefCell::new(block)));
-        //     drop(context_ref);
-        //     input = remaining;
-        // }
-        // 
-        todo!()
-        // Ok(Self {
-        //     blocks: parse_context.prev_blocks.iter().map(|v|v.clone()).collect(),
-        //     path: None,
-        // })
+        let mut parse_context = ParseContext::new();
+
+        while !input.trim().is_empty() {
+            let context_ref = &mut parse_context;
+            let (remaining, block) = parse_commented_block((input, context_ref))
+                .map_err(|e| RError::from(e)
+                    .attach_printable("Failed to parse TRNSYS block"))?;
+            context_ref.prev_blocks.push(Rc::new(RefCell::new(block)));
+            input = remaining;
+        }
+
+
+        Ok(Self{
+            ctx: parse_context,
+            path: None,
+        })
     }
 
     /// Load a TRNSYS deck file from disk
     pub fn load<P: AsRef<Path>>(path: P) -> ParseResult<Self> {
         let content = fs::read_to_string(&path).map_err(|io_err| Report::new(io_err.into()))?;
-        let mut file = Self::parse(&content)?;
-        file.path = Some(path.as_ref().to_path_buf());
-
-        Ok(file)
+        let mut ctx = Self::parse(&content)?;
+        ctx.path = Some(path.as_ref().to_path_buf());
+        Ok(ctx)
     }
 
     /// Save the TRNSYS deck file to disk

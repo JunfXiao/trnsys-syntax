@@ -6,7 +6,6 @@ use std::fmt::Debug;
 use std::ops::Sub;
 mod comment;
 mod block;
-mod document;
 mod util;
 mod str_wrapper;
 mod raw_header;
@@ -59,10 +58,8 @@ pub enum BlockKind {
     #[strum(serialize = "TIME_REPORT")]
     TimeReport,
     #[strum(serialize = "CONSTANTS")]
-    #[has_lifetime]
     Constants,
     #[strum(serialize = "EQUATIONS")]
-    #[has_lifetime]
     Equations,
     #[strum(serialize = "ACCELERATE")]
     Accelerate,
@@ -86,7 +83,6 @@ pub enum BlockKind {
     End,
     // Component definitions
     #[strum(serialize = "UNIT")]
-    #[has_lifetime]
     Unit,
     // Listing control statements
     #[strum(serialize = "WIDTH")]
@@ -117,9 +113,9 @@ pub trait BlockParser<'a>: Sized + Debug + TypedBlock {
         input: &'a str,
         raw_header: RawHeader<'a>,
         context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<'a, Self>, RError>;
+    ) -> IResult<&'a str, Commented<Self>, RError>;
     
-    fn try_parse_block_without_context(raw_header: RawHeader<'a>)  -> Result<Commented<'a, Self>, RError> {
+    fn try_parse_block_without_context(raw_header: RawHeader<'a>)  -> Result<Commented<Self>, RError> {
         let mut context = ParseContext::default();
         let input = "";
         let (_, result) = Self::try_parse_block(input, raw_header, &mut context)?;

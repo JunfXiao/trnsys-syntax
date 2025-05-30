@@ -21,18 +21,18 @@ use nom::bytes::complete::is_not;
 
 #[derive(Debug, Display, Clone)]
 #[display("Unit {} of Type {}", self.1.as_ref().borrow().number, self.1.as_ref().borrow().type_number)]
-pub struct StrUnit<'a>(pub &'a str, pub Rc<RefCell<Unit<'a>>>);
+pub struct StrUnit<'a>(pub &'a str, pub Rc<RefCell<Unit>>);
 
 impl<'a> StrUnit<'a> {
-    pub fn new(input: &'a str, unit: Unit<'a>) -> Self {
+    pub fn new(input: &'a str, unit: Unit) -> Self {
         Self(input, Rc::new(RefCell::new(unit)))
     }
 
-    pub fn unit(&self) -> Ref<Unit<'a>> {
+    pub fn unit(&self) -> Ref<Unit> {
         self.1.as_ref().borrow()
     }
 
-    pub fn unit_mut(&self) -> RefMut<Unit<'a>> {
+    pub fn unit_mut(&self) -> RefMut<Unit> {
         self.1.as_ref().borrow_mut()
     }
 }
@@ -223,7 +223,7 @@ pub fn parse_inputs(input_unit: StrUnit) -> IResult<StrUnit, (), RError> {
 
 fn parse_input_labels<'a>(
     num: usize,
-) -> impl Parser<&'a str, Output = Vec<Commented<'a, &'a str>>, Error = RError> {
+) -> impl Parser<&'a str, Output = Vec<Commented<&'a str>>, Error = RError> {
     move |input: &'a str| {
         let parser = many_m_n(
             num,
@@ -261,7 +261,7 @@ fn parse_input_labels<'a>(
 
 fn parse_input_init_values<'a>(
     num: usize,
-) -> impl Parser<&'a str, Output = Vec<Commented<'a, Expr>>, Error = RError> {
+) -> impl Parser<&'a str, Output = Vec<Commented<Expr>>, Error = RError> {
     move |input: &'a str| {
         let parser = many_m_n(
             num,

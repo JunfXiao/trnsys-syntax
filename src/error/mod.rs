@@ -112,18 +112,6 @@ where T: ToString
 
 
 
-// impl<I> ParseError<I> for Error
-// where
-//     I: Clone + std::fmt::Debug + Display,
-// {
-//     fn from_error_kind(input: I, kind: ErrorKind) -> Self {
-//         Self::new_from_error_kind(input, kind, ErrorScope::Document)
-//     }
-// 
-//     fn append(input: I, kind: ErrorKind, other: Self) -> Self {
-//         todo!()
-//     }
-// }
 
 impl From<strum::ParseError> for Error {
     fn from(e: strum::ParseError) -> Self {

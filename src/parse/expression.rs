@@ -453,7 +453,7 @@ fn parse_eq_block(input: &str) -> IResult<&str, Commented<EquationDef>, RError> 
 /// Parse an equation in the form of `name = expr`
 pub fn parse_equations<'a>(
     num: usize,
-) -> impl Parser<&'a str, Output = Vec<Commented<'a, EquationDef<'a>>>, Error = RError> {
+) -> impl Parser<&'a str, Output = Vec<Commented<EquationDef>>, Error = RError> {
     many_m_n(num, num, parse_eq_block)
 }
 

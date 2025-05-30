@@ -10,26 +10,26 @@ use either::Either;
 /// UNIT n TYPE m SOME COMMENTS
 #[derive(Debug, Display, Clone, Default)]
 #[display("Unit {number} of type {type_number}")]
-pub struct Unit<'a> {
+pub struct Unit {
     pub number: u32,
     pub type_number: u32,
     pub unit_name: String,
-    pub parameters: Option<Vec<Commented<'a, Expr>>>,
+    pub parameters: Option<Vec<Commented<Expr>>>,
     pub inputs: Option<Either<
-        Vec<UnitInput<'a, WithInitVal>>,
-        Vec<UnitInput<'a, WithLabel>>
+        Vec<UnitInput<WithInitVal>>,
+        Vec<UnitInput<WithLabel>>
     >>,
-    pub derivatives: Option<Vec<Commented<'a, Expr>>>,
-    pub trace: Option<Commented<'a, Trace>>,
-    pub etrace: Option<Commented<'a, Trace>>,
-    pub format: Option<Commented<'a, Format>>,
-    pub metadata: Option<Commented<'a, Metadata>>,
-    pub assigns: Option<Vec<Commented<'a, Assign>>>,
-    pub designates: Option<Vec<Commented<'a, Designate>>>,
+    pub derivatives: Option<Vec<Commented<Expr>>>,
+    pub trace: Option<Commented<Trace>>,
+    pub etrace: Option<Commented<Trace>>,
+    pub format: Option<Commented<Format>>,
+    pub metadata: Option<Commented<Metadata>>,
+    pub assigns: Option<Vec<Commented<Assign>>>,
+    pub designates: Option<Vec<Commented<Designate>>>,
 }
 
 
-pub trait InputMode<'a>:Clone+Default {
+pub trait InputMode:Clone+Default {
     type Field: Clone + Debug;
 }
 
@@ -38,18 +38,18 @@ pub struct WithInitVal;
 #[derive(Debug, Clone, Default, Display)]
 pub struct WithLabel;
 
-impl<'a> InputMode<'a> for WithInitVal {
-    type Field = Commented<'a, Expr>;
+impl InputMode for WithInitVal {
+    type Field = Commented<Expr>;
 }
 
-impl<'a> InputMode<'a> for WithLabel {
-    type Field = Commented<'a, String>;
+impl InputMode for WithLabel {
+    type Field = Commented<String>;
 }
 
 /// INPUTS n u1,o1 u2,o2 ... un,on v1 v2 ... vn [labels for printers/plotters]
 #[derive(Debug, Clone, Constructor)]
-pub struct UnitInput<'a, IM: InputMode<'a>> {
-    pub connection: Commented<'a, Expr>,
+pub struct UnitInput<IM: InputMode> {
+    pub connection: Commented<Expr>,
     pub extra_data: IM::Field,
 }
 

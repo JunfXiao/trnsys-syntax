@@ -1,15 +1,10 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Data, DeriveInput, parse_macro_input, Attribute};
+use syn::{Data, DeriveInput, parse_macro_input};
 
 
-fn variant_has_lifetime(attrs: &[Attribute]) -> bool {
-    attrs.iter().any(|attr| {
-        attr.path().is_ident("has_lifetime")
-    })
-}
 
-#[proc_macro_derive(BlockEnum, attributes(has_lifetime))]
+#[proc_macro_derive(BlockEnum)]
 pub fn derive_block_enum(input: TokenStream) -> TokenStream {
     // Extract enum name and variants
     let ast = parse_macro_input!(input as DeriveInput);
@@ -19,7 +14,7 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
     let variants = if let Data::Enum(data) = ast.data {
         data.variants
             .into_iter()
-            .map(|v| (v.ident, variant_has_lifetime(&v.attrs)))
+            .map(|v| v.ident)
             .collect::<Vec<_>>()
     } else {
         return syn::Error::new_spanned(kind_enum_name, "BlockEnum can only be applied to Enum")
@@ -27,31 +22,16 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
             .into();
     };
 
-    let enum_variants = variants.iter().map(|(ident, has_lt)| {
-        if *has_lt {
-
-            quote! { #ident ( Commented<'a, #ident<'a>> ), }
-        } else {
-            quote! { #ident ( Commented<'a, #ident> ), }
-        }
+    let enum_variants = variants.iter().map(|(ident)| {
+            quote! { #ident ( Commented<#ident> ), }
     }).collect::<Vec<_>>();
 
     // generate the enum definition
     let block_enum_name = format_ident!("Block");
 
     // generate each variant's parsing function
-    let try_parse_branches = variants.iter().map(|(ident, has_lt)| {
-        if *has_lt {
-            quote! {
-                #kind_enum_name::#ident => {
-                    <#ident<'a> as BlockParser>::try_parse_block(
-                        &input,
-                        raw_header,
-                        context
-                    ).map(|(rest, v)| (rest, #block_enum_name::#ident(v)))
-                }
-            }
-        } else {
+    let try_parse_branches = variants.iter().map(|ident| {
+
             quote! {
                 #kind_enum_name::#ident => {
                     <#ident as BlockParser>::try_parse_block(
@@ -61,22 +41,22 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
                     ).map(|(rest, v)| (rest, #block_enum_name::#ident(v)))
                 }
             }
-        }
+        
     });
 
-    let comment_branches = variants.iter().map(|(v, _)| {
+    let comment_branches = variants.iter().map(|v| {
         quote! {
             #block_enum_name::#v(c) => &c.comments,
         }
     });
 
-    let comment_mut_branches = variants.iter().map(|(v, _)| {
+    let comment_mut_branches = variants.iter().map(|v| {
         quote! {
             #block_enum_name::#v(c) => &mut c.comments,
         }
     });
     
-    let block_kind_branches = variants.iter().map(|(v, _)| {
+    let block_kind_branches = variants.iter().map(|v| {
         let block_kind = format_ident!("{}", v);
         quote! {
             #block_enum_name::#block_kind(_) => #kind_enum_name::#block_kind,
@@ -88,14 +68,14 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
     // generate the enum definition
     let enum_def = quote! {
         #[derive(Debug)]
-        #vis enum #block_enum_name<'a> {
+        #vis enum #block_enum_name {
             #(
                 #enum_variants
             )*
         }
 
-        impl<'a> #block_enum_name<'a> {
-            pub fn try_parse<'b>(input: &'a str, raw_header: RawHeader<'a>, context: &'b mut ParseContext) -> IResult<&'a str, Self, RError> {
+        impl #block_enum_name {
+            pub fn try_parse<'a,'b>(input: &'a str, raw_header: RawHeader<'a>, context: &'b mut ParseContext) -> IResult<&'a str, Self, RError> {
                 {
                     match raw_header.block_kind{
                     #(
@@ -108,7 +88,7 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
                 }
                 }
             }
-            pub fn comments(&self) -> &Comments<'a> {
+            pub fn comments(&self) -> &Comments {
                 match self {
                     #(
                         #comment_branches
@@ -116,7 +96,7 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
                 }
             }
 
-            pub fn comments_mut(&mut self) -> &mut Comments<'a> {
+            pub fn comments_mut(&mut self) -> &mut Comments {
                 match self {
                     #(
                         #comment_mut_branches
@@ -135,17 +115,9 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
     };
 
     // generate the trait `TypedBlock` for each struct
-    let typed_block_impls = variants.iter().map(|(v, lt)| {
+    let typed_block_impls = variants.iter().map(|v| {
         let block_kind = format_ident!("{}", v);
-        if *lt {
-            quote! {
-            impl<'a> TypedBlock for #block_kind<'a> {
-                fn block_kind() -> BlockKind {
-                    BlockKind::#block_kind
-                }
-            }
-            }
-        } else {
+
             quote! {
             impl TypedBlock for #block_kind {
                 fn block_kind() -> BlockKind {
@@ -153,7 +125,7 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
                 }
             }
             }
-        }
+        
 
     });
 

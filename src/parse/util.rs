@@ -297,7 +297,7 @@ pub fn parse_int(input: &str) -> IResult<&str, isize, RError> {
 pub fn parse_mixed_param<'a, I, P, PO, E>(
     mut parser: P,
     separators: Option<&'a str>,
-) -> impl Parser<I, Output = Commented<'a, PO>, Error = E>
+) -> impl Parser<I, Output = Commented<PO>, Error = E>
 where
     I: Input<Item = char>
         + nom::Offset
@@ -327,11 +327,11 @@ where
 
         let (_, output) = all_consuming(|i| parser.parse(i)).parse(param)?;
         let mut commented = Commented::from(output);
-        commented.comments.comment_inline = inline_comment.map(Into::into);
+        commented.comments.comment_inline = inline_comment.map(|i|i.to_string());
 
         if block_comment.is_some() {
             commented.comments.comment_post =
-                block_comment.map(|v| v.into_iter().map(Into::into).collect());
+                block_comment.map(|v| v.into_iter().map(|i|i.to_string()).collect());
         }
         Ok((input, commented))
     }

@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use derive_more::{AsMut, AsRef, Constructor, Deref, DerefMut, Display};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display, Formatter};
@@ -6,21 +5,19 @@ use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, Display)]
 #[display("Pre: {comment_pre:#?}, \nPost: {comment_post:#?}, Inline: \n{comment_inline:#?}")]
-pub struct Comments<'a> {
-    pub comment_inline: Option<Cow<'a,str>>,
-    pub comment_pre: Option<Vec<Cow<'a,str>>>,
-    pub comment_post: Option<Vec<Cow<'a,str>>>,
+pub struct Comments {
+    pub comment_inline: Option<String>,
+    pub comment_pre: Option<Vec<String>>,
+    pub comment_post: Option<Vec<String>>,
 }
 
 pub trait CommentTrait {}
 
-impl<'a> Comments<'a> {
-    pub fn with_inline<T>(comment_inline: Option<T>) -> Self
-    where
-        T: Into<Cow<'a, str>>,
+impl Comments {
+    pub fn with_inline<T>(comment_inline: Option<String>) -> Self
     {
         Self {
-            comment_inline: comment_inline.map(Into::into),
+            comment_inline,
             comment_pre: None,
             comment_post: None,
         }
@@ -28,16 +25,16 @@ impl<'a> Comments<'a> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, AsRef, AsMut, Deref, DerefMut, Constructor)]
-pub struct Commented<'a, T: Debug> {
+pub struct Commented<T: Debug> {
     #[as_ref]
     #[as_mut]
     #[deref]
     #[deref_mut]
     pub value: T,
-    pub comments: Comments<'a>,
+    pub comments: Comments,
 }
 
-impl<'a, T> From<T> for Commented<'a, T>
+impl<T> From<T> for Commented<T>
 where
     T: Debug,
 {
@@ -51,7 +48,7 @@ where
 
 
 
-impl<'a, T: Display + std::fmt::Debug> Display for Commented<'a, T> {
+impl<T: Display + std::fmt::Debug> Display for Commented<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(ref pre) = self.comments.comment_pre {
             for line in pre {
