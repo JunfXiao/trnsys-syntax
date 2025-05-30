@@ -62,7 +62,7 @@ pub fn parse_block_comment<I, E>(input: I) -> IResult<I, Option<Vec<I>>, E>
 where
     I: Input + Compare<&'static str> + Offset + Display,
     <I as Input>::Item: AsChar,
-    E: nom::error::ParseError<I>, 
+    E: nom::error::ParseError<I>,
     <I as Input>::Iter: DoubleEndedIterator
 {
     parse_block_comment_with(alt((tag("*"), tag("!")))).parse(input)

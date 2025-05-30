@@ -1,5 +1,5 @@
 #![allow(deprecated)]
-use crate::ast::UnitConnection;
+use crate::ast::{Expr, UnitConnection};
 use derive_more::{Constructor, Display, From, Into};
 use derive_more::with_trait::{FromStr};
 use strum::{FromRepr};
@@ -14,9 +14,9 @@ pub struct Version {
 /// SIMULATION t0 tf Δt
 #[derive(Debug, Clone, Constructor)]
 pub struct Simulation {
-    pub start_time: f64,
-    pub stop_time: f64,
-    pub time_step: f64,
+    pub start_time: Expr,
+    pub stop_time: Expr,
+    pub time_step: Expr,
 }
 
 /// TOLERANCES εD εA or TOLERANCES -ζD -ζA
@@ -29,9 +29,9 @@ pub struct Tolerances {
 /// LIMITS m n p
 #[derive(Debug, Clone, Constructor)]
 pub struct Limits {
-    pub max_iterations: usize,
-    pub max_warnings: usize,
-    pub trace_limit: Option<usize>,
+    pub max_iterations: Expr,
+    pub max_warnings: Expr,
+    pub trace_limit: Option<Expr>,
 }
 
 /// NAN_CHECK n

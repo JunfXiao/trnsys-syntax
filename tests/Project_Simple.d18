@@ -1,0 +1,105 @@
+VERSION 18
+*******************************************************************************
+
+*******************************************************************************
+*** Units
+*******************************************************************************
+
+*******************************************************************************
+*** Control cards
+*******************************************************************************
+* START, STOP and STEP
+CONSTANTS 3
+START=0
+STOP=168
+STEP=0.125
+SIMULATION 	 START	 STOP	 STEP	! Start time	End time	Time step
+TOLERANCES 0.001 0.001			! Integration	 Convergence
+LIMITS START 30 30				! Max iterations	Max warnings	Trace limit
+DFQ 1					! TRNSYS numerical integration solver method
+WIDTH 80				! TRNSYS output file width, number of characters
+LIST 					! NOLIST statement
+					! MAP statement
+SOLVER 0 1 1				! Solver statement	Minimum relaxation factor	Maximum relaxation factor
+NAN_CHECK 0				! Nan DEBUG statement
+OVERWRITE_CHECK 0			! Overwrite DEBUG statement
+TIME_REPORT 0			! disable time report
+EQSOLVER 0				! EQUATION SOLVER statement
+* User defined CONSTANTS
+*$USER_CONSTANTS
+EQUATIONS 1
+nPlots = (STOP-START)/168.
+*$USER_CONSTANTS_END
+
+
+* Model "Type15-3" (Type 15)
+*
+
+UNIT 3 TYPE 15	 Type15-3
+*$UNIT_NAME Type15-3
+*$MODEL .\Weather Data Reading and Processing\Standard Format\Energy+ Weather Files (EPW)\Type15-3.tmf
+*$POSITION 541 362
+*$LAYER Weather - Data Files # #
+PARAMETERS 9
+3		! 1 File Type
+30		! 2 Logical unit
+5		! 3 Tilted Surface Radiation Mode
+0.2		! 4 Ground reflectance - no snow
+0.7		! 5 Ground reflectance - snow cover
+1		! 6 Number of surfaces
+1		! 7 Tracking mode
+0.0		! 8 Slope of surface
+0		! 9 Azimuth of surface
+*** External files
+ASSIGN "C:\TRNSYS18\Weather\Energy+\PER_Lima.846280_IWEC.epw" 30
+*|? Which file contains the Energy+ weather data? |1000
+*------------------------------------------------------------------------------
+
+* Model "Type175a" (Type 175)
+*
+
+UNIT 4 TYPE 175	 Type175a
+*$UNIT_NAME Type175a
+*$MODEL .\Electrical\Power Conditioning\Power INPUT is known\Type175a.tmf
+*$POSITION 1033 298
+*$LAYER Main #
+*$# MODE=1.   Input power (power source) is known.
+*$#
+*$#
+*$#
+*$#
+*$#
+*$#
+*$#
+*$#
+*$#
+*$#
+*$#
+*$#
+*$#
+*$#
+*$#
+*$#
+*$#
+*$#
+*$#
+*$#
+PARAMETERS 7
+1		! 1 Mode
+1600000		! 2 Nominal power
+5.836E-3		! 3 Idling constant
+2.06		! 4 Set point voltage
+138.42		! 5 Ohmic constant
+1		! 6 Number of units in parallel
+0		! 7 Parasitic power
+INPUTS 3
+0,0		! [unconnected] Input voltage
+0,0		! [unconnected] Output voltage
+0,0		! [unconnected] Input power
+*** INITIAL INPUT VALUES
+22000 130 10000
+*------------------------------------------------------------------------------
+
+END
+*!LINK_STYLE
+*!LINK_STYLE_END

@@ -62,7 +62,7 @@ pub enum Error {
         scope: ErrorScope,
     },
     
-    #[error("Cannot Convert \"{input}\" to type \"{target}\"")]
+    #[error("Cannot Convert \"{input:.20}\" to type \"{target}\"")]
     ConversionError{
         input: String,
         target: String,
@@ -71,7 +71,7 @@ pub enum Error {
     #[error(transparent)]
     ContentError(#[from] ContentError),
     
-    #[error("Invalid {scope} Syntax \"{input}\" ({kind:?} Failed)")]
+    #[error("Invalid {scope}: '{kind:?}' Failed\n \"{input:.20}\"...")]
     GeneralError{
         input: String,
         kind: ErrorKind,
@@ -96,6 +96,7 @@ impl Error {
 }
 
 pub type RError = ReportWrapper<Error>;
+
 
 impl<'a, T> NewFromErrorKind<T> for Error
 where T: ToString
@@ -136,7 +137,7 @@ impl From<ParseIntError> for Error {
     fn from(e: ParseIntError) -> Self {
         Error::UnexpectedContent {
             message: format!("Failed to parse integer: {:?}", e.kind()),
-            scope: ErrorScope::Document,
+            scope: ErrorScope::Param,
         }
     }
 }
@@ -145,7 +146,7 @@ impl From<ParseFloatError> for Error {
     fn from(e: ParseFloatError) -> Self {
         Error::UnexpectedContent {
             message: format!("Failed to parse float: {:}", e.to_string()),
-            scope: ErrorScope::Document,
+            scope: ErrorScope::Param,
         }
     }
 }
@@ -155,7 +156,7 @@ impl From<ParseBoolError> for Error {
         
         Error::UnexpectedContent {
             message: format!("Failed to parse boolean: {:?}", value),
-            scope: ErrorScope::Document,
+            scope: ErrorScope::Param,
         }
     }
 }

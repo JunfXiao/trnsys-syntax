@@ -99,12 +99,21 @@ where
         Ok(items)
     }
 
+    /// Convert the items in the header to a vector of type `T`.
     pub fn to_vec<T>(&self) -> Result<Vec<T>, RError>
     where
         T: TryFromStr<'a>,
         <T as TryFromStr<'a>>::Error: std::error::Error + Context,
     {
         self.map(|v| T::try_from_str(v))
+    }
+
+    /// Transform the items in the header using a function `f`.
+    pub fn transform<F,T>(&self, f:F) -> Result<Vec<T>, RError>
+    where
+        F: Fn(&str) -> Result<T, RError>,
+    {
+        self.map(|v| f(v.as_ref()))
     }
 }
 
@@ -145,7 +154,7 @@ where
     E: nom::error::ParseError<I>,
     nom::Err<RError>: From<nom::Err<E>>, Cow<'a, str>: From<I>, <I as Input>::Iter: DoubleEndedIterator
 {
-    move |input: I| {
+     move |input: I| {
         
         let (input, pre_comments) = complete(parse_block_comment).parse(input)?;
         

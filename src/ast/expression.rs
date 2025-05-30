@@ -53,7 +53,8 @@ impl Expr {
         }
     }
     /// Check an expression with the given variable bindings
-    pub fn check(&self, variables: &HashMap<String, Expr>) -> ParseResult<(), ContentError> {
+    /// TODO: Migrate to `DocContext` to check.
+    pub fn check(&self, variables: &HashMap<String,Expr>) -> ParseResult<(), ContentError> {
         match self {
             Expr::Identifier(name) => variables
                 .get(name)
@@ -101,6 +102,7 @@ impl Expr {
         }
     }
 
+    /// TODO: Evaluate the expression with the given `DocContext`.
     pub fn evaluate(&self) -> ParseResult<Option<f64>, ContentError> {
         match self {
             Expr::Literal(value) => Ok(Some(*value)),
@@ -127,8 +129,7 @@ impl Expr {
             _ => Ok(None),
         }
     }
-
-
+    
     pub fn iter_tree<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Expr> + 'a> {
         match self {
             Expr::BinaryOp { first, second, .. } => {
@@ -171,6 +172,9 @@ impl Expr {
                 (ids, outputs)
             })
     }
+    
+    
+    
 }
 
 impl Display for Expr {

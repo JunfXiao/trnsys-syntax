@@ -27,7 +27,7 @@ impl GlobalId {
     pub fn type_str(&self) -> String {
         match self {
             GlobalId::Unit(_) => "Unit".to_string(),
-            GlobalId::Variable(_) => "Variable".to_string(),
+            GlobalId::Variable(_) => "Variable/Constant".to_string(),
             GlobalId::Block(k, _) => format!("Block {}", k),
             GlobalId::LogicalUnit(_) => "Logical Unit".to_string(),
         }
@@ -49,7 +49,7 @@ impl Display for GlobalId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             GlobalId::Unit(unit) => write!(f, "Unit {}", unit),
-            GlobalId::Variable(expr) => write!(f, "Equation {}", expr),
+            GlobalId::Variable(expr) => write!(f, "Equation/Constant {}", expr),
             GlobalId::Block(block_kind, block_index) => {
                 write!(f, "Block {:?} at index {}", block_kind, block_index)
             },
@@ -58,8 +58,8 @@ impl Display for GlobalId {
     }
 }
 
-#[derive(Default, Debug)]
-pub struct ParseContext {
+#[derive(Default, Debug, Clone)]
+pub struct DocContext {
     pub prev_blocks: Vec<Rc<RefCell<Block>>>,
     /// The hashmap of dependencies.
     /// 
@@ -70,7 +70,7 @@ pub struct ParseContext {
 
 
 
-impl<'a> ParseContext {
+impl<'a> DocContext {
 
     pub fn new() -> Self {
         let mut reserved = HashSet::new();
@@ -146,13 +146,6 @@ impl<'a> ParseContext {
         Ok(())
     }
     
-    /// Announce the existence of a new id WITHOUT dependencies
-    pub fn announce_id(
-        &mut self,
-        id: GlobalId,
-    ) -> Result<(), RError> {
-        self.register_dep(id, None)
-    }
     
     /// Returns the dependencies of a given id
     pub fn dependent(

@@ -439,7 +439,7 @@ mod tests {
     
     use super::*;
     use crate::ast::{Unit, UnitConnection};
-    use crate::parse::{ParseContext, parse_commented_block, Block};
+    use crate::parse::{DocContext, parse_commented_block, Block};
 
     #[test]
     fn test_parse_parameters() -> Result<(), RError> {
@@ -699,7 +699,7 @@ INPUTS 1
 ! POST COMMENTS
 *------------------------------------------------------------------------------
         "#;
-        let mut context = ParseContext::new();
+        let mut context = DocContext::new();
         let (input, block) = parse_commented_block((input, &mut context))?;
         assert!(input.trim().is_empty());
         // to Block::Unit(Unit) Struct

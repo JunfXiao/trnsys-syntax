@@ -4,14 +4,15 @@ use crate::ast::{
 };
 use crate::error::{Error, ErrorScope, RError};
 use crate::parse::{
-    BlockKind, BlockParser, map_report, op_permutation, parse_block_comment, parse_commented_row, parse_header_of_kind,
+    BlockKind, BlockParser, map_report, op_permutation, parse_block_comment,
+    parse_commented_row, parse_header_of_kind,
 };
 use nom::Parser;
 use nom::bytes::complete::take_while;
 use nom::character::complete::{alphanumeric1, multispace0};
-use nom::combinator::{all_consuming, complete, recognize};
 use nom::combinator::peek;
-use nom::error::ErrorKind;
+use nom::combinator::{all_consuming, complete, recognize};
+use nom::error::context;
 use nom::multi::many_m_n;
 use nom::sequence::pair;
 use nom::{
@@ -365,21 +366,12 @@ pub fn parse_binary_call(input: &str) -> ExprResult<Expr> {
     ))
 }
 
+/// Promote all errors to failures
 fn promote<'a>(
     mut parser: impl Parser<&'a str, Output = Expr, Error = RError>,
 ) -> impl Parser<&'a str, Output = Expr, Error = RError> {
     move |input| {
-        parser.parse(input).map_err(|e| match e {
-            nom::Err::Error(ne) | nom::Err::Failure(ne) => {
-                let err = Error::GeneralError {
-                    input: input.to_string(),
-                    kind: ErrorKind::Verify,
-                    scope: ErrorScope::Expression,
-                };
-                nom::Err::Failure(ne.change_context(err))
-            }
-            nom::Err::Incomplete(needed) => nom::Err::Incomplete(needed),
-        })
+        parser.parse(input).map_err(|e| e.into())
     }
 }
 
@@ -396,15 +388,21 @@ pub fn parse_expr(input: &str) -> IResult<&str, Expr, RError> {
 
 /// Consumes the entire input and returns the parsed expression
 pub fn consume_expr(input: &str) -> ExprResult<Expr> {
-    promote(all_consuming(preceded(space0, parse_expr))).parse(input)
+    map_report(promote(all_consuming(preceded(space0, parse_expr))), |r| {
+        r.attach_printable("Failed to consume entire expression.")
+    })
+    .parse(input)
 }
 
 //
 fn equation_start(input: &str) -> IResult<&str, &str, RError> {
-    delimited(
-        space0,
-        complete(alt((alphanumeric1, tag("_")))),
-        (space0, char('='), space0),
+    context(
+        "Equation Start",
+        delimited(
+            multispace0,
+            complete(alt((alphanumeric1, tag("_")))),
+            (space0, char('='), space0),
+        ),
     )
     .parse(input)
 }
@@ -455,6 +453,20 @@ pub fn parse_equations<'a>(
     num: usize,
 ) -> impl Parser<&'a str, Output = Vec<Commented<EquationDef>>, Error = RError> {
     many_m_n(num, num, parse_eq_block)
+}
+
+pub fn parse_literal_or_identifier(input: &str) -> Result<Expr, RError> {
+    let (_, result) = map_report(
+        promote(all_consuming(delimited(
+            space0,
+            alt((parse_literal, parse_identifier)),
+            space0,
+        ))),
+        |r| r.attach_printable("Failed to consume entire expression."),
+    )
+    .parse(input)
+    .map_err(|e| RError::from(e))?;
+    Ok(result)
 }
 
 #[cfg(test)]
@@ -550,7 +562,7 @@ mod tests {
         );
         Ok(())
     }
-    
+
     #[test]
     fn test_parse_unit_output() -> Result<(), RError> {
         let expr = "\t 200,8";
@@ -565,7 +577,7 @@ mod tests {
         assert_eq!(parsed_expr, UnitOutput(UnitConnection::new(200, 8)));
         Ok(())
     }
-    
+
     #[test]
     fn test_parse_unit_output_bracketed() -> Result<(), RError> {
         let expr = "[200,8]";

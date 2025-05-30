@@ -38,10 +38,11 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
                         &input,
                         raw_header,
                         context
-                    ).map(|(rest, v)| (rest, #block_enum_name::#ident(v)))
+                    ).map_err(|e|e.attach_printable(format!("When parsing block '{}'", raw_header_kind)))
+                    .map(|(rest, v)| (rest, #block_enum_name::#ident(v)))
                 }
             }
-        
+
     });
 
     let comment_branches = variants.iter().map(|v| {
@@ -75,16 +76,17 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
         }
 
         impl #block_enum_name {
-            pub fn try_parse<'a,'b>(input: &'a str, raw_header: RawHeader<'a>, context: &'b mut ParseContext) -> IResult<&'a str, Self, RError> {
+            pub fn try_parse<'a,'b>(input: &'a str, raw_header: RawHeader<'a>, context: &'b mut DocContext) -> Result<(&'a str, Self), RError> {
                 {
+                    let raw_header_kind = raw_header.block_kind.clone();
                     match raw_header.block_kind{
                     #(
                         #try_parse_branches
                     )*,
-                    _ => Err(nom::Err::Error(Error::UnknownKeyword {
+                    _ => Err(Error::UnknownKeyword {
                         keyword: raw_header.block_kind.as_ref().to_string(),
                         scope: ErrorScope::Document
-                    }.into()))
+                    }.into())
                 }
                 }
             }
@@ -125,7 +127,7 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
                 }
             }
             }
-        
+
 
     });
 

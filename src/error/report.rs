@@ -1,7 +1,7 @@
 use core::fmt;
 use crate::error::{ErrorScope, Error as ErrorBase};
 use error_stack::{Context, Report};
-use nom::error::{ErrorKind, FromExternalError, ParseError};
+use nom::error::{ContextError, ErrorKind, FromExternalError, ParseError};
 use std::error::Error as StdError;
 use std::fmt::Debug;
 use nom::Err as NomErr;
@@ -62,6 +62,16 @@ where
 pub trait NewFromErrorKind<T> {
     #[track_caller]
     fn new_from_error_kind(input: T, kind: ErrorKind, scope: ErrorScope) -> Self;
+}
+
+impl<I, T> ContextError<I> for ReportWrapper<T>
+where
+    T: NewFromErrorKind<I> + Context + StdError + Sized,
+{
+    fn add_context(_input: I, _ctx: &'static str, other: Self) -> Self {
+        
+        other.attach_printable(_ctx)
+    }
 }
 
 impl<I, T> ParseError<I> for ReportWrapper<T>

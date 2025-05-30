@@ -10,14 +10,12 @@ mod util;
 mod str_wrapper;
 mod raw_header;
 mod bool_wrapper;
-mod context;
 mod expression;
 mod unit;
 
 pub use block::*;
 pub use bool_wrapper::*;
 pub use comment::*;
-pub use context::*;
 pub use expression::*;
 pub use unit::*;
 
@@ -30,11 +28,13 @@ use nom::IResult;
 use crate::ast::*;
 use block_enum_derive::BlockEnum;
 use derive_more::Display;
-use error_stack::{Context, Report};
+use error_stack::{Context, Report, ResultExt};
 use lazy_static::lazy_static;
 use nom::bytes::complete::is_not;
-use nom::character::complete::{multispace1, space0};
+use nom::character::complete::{line_ending, multispace1, space0};
 use std::str::FromStr;
+use nom::branch::alt;
+use nom::combinator::eof;
 use strum::IntoEnumIterator;
 use strum_macros::{AsRefStr, EnumIter, EnumString};
 
@@ -112,13 +112,15 @@ pub trait BlockParser<'a>: Sized + Debug + TypedBlock {
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader<'a>,
-        context: &'b mut ParseContext,
-    ) -> IResult<&'a str, Commented<Self>, RError>;
+        context: &'b mut DocContext,
+    ) -> Result<(&'a str, Commented<Self>), RError>;
     
     fn try_parse_block_without_context(raw_header: RawHeader<'a>)  -> Result<Commented<Self>, RError> {
-        let mut context = ParseContext::default();
+        let mut context = DocContext::default();
         let input = "";
-        let (_, result) = Self::try_parse_block(input, raw_header, &mut context)?;
+        let raw_header_kind = raw_header.block_kind.clone();
+        let (_, result) = Self::try_parse_block(input, raw_header, &mut context)
+            .map_err(|e|e.attach_printable(format!("When parsing block '{}'", raw_header_kind)))?;
         Ok(result)
     }
 }
@@ -140,12 +142,12 @@ lazy_static! {
 
 pub fn parse_any_block_kind<'a, I, O>(input: I) -> IResult<I, O, RError> 
 where 
-    I: Input + std::fmt::Display,
+    I: Input + std::fmt::Display + nom::Compare<&'static str>,
     O: TryFrom<I>,
     <O as TryFrom<I>>::Error: std::error::Error + Context,
     &'a str: FindToken<<I as Input>::Item>, <I as Input>::Item: AsChar
 {
-    let mut parse_type_text = delimited(space0, is_not(" \n\t*!"), multispace1);
+    let mut parse_type_text = delimited(space0, is_not(" \n\t*!"), alt((multispace1, line_ending, eof)));
     let (remaining, block_type) = parse_type_text.parse(input)?;
     
     let keyword = block_type.to_string();
