@@ -1,0 +1,23 @@
+[package]
+name = "trnsys-syntax"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+error-stack = { version = "0.5.0", features = ["serde"] }
+nom = "8.0.0"
+serde = { version = "1.0.219", features = ["derive"] }
+thiserror = "2.0.12"
+lazy_static = "1.5.0"
+strum = { version = "0.27.1", features = ["strum_macros", "derive"] }
+strum_macros = "0.27.1"
+subenum = "1.1.2"
+derive_more = { version = "2.0.1", features = ["as_ref", "debug", "deref", "deref_mut", "display", "from", "from_str", "into", "unwrap", "try_into", "constructor", "try_from"] }
+block_enum_derive = { path = "./block_enum_derive" }
+phf = { version = "0.11.3", features = ["macros"] }
+either = "1.15.0"
+
+[workspace]
+members = [
+    "block_enum_derive",
+]
