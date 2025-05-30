@@ -1,0 +1,283 @@
+use crate::ast::Version;
+use crate::error::{ContentError, Error, ErrorScope, RError, ReportWrapper};
+use nom::{AsChar, FindToken, Input, Mode, OutputMode, PResult, Parser};
+use std::collections::HashSet;
+use std::fmt::Debug;
+use std::ops::Sub;
+mod comment;
+mod block;
+mod document;
+mod util;
+mod str_wrapper;
+mod raw_header;
+mod bool_wrapper;
+mod context;
+mod expression;
+mod unit;
+
+pub use block::*;
+pub use bool_wrapper::*;
+pub use comment::*;
+pub use context::*;
+pub use expression::*;
+pub use unit::*;
+
+pub use raw_header::*;
+pub use str_wrapper::*;
+pub use util::*;
+
+use nom::sequence::delimited;
+use nom::IResult;
+use crate::ast::*;
+use block_enum_derive::BlockEnum;
+use derive_more::Display;
+use error_stack::{Context, Report};
+use lazy_static::lazy_static;
+use nom::bytes::complete::is_not;
+use nom::character::complete::{multispace1, space0};
+use std::str::FromStr;
+use strum::IntoEnumIterator;
+use strum_macros::{AsRefStr, EnumIter, EnumString};
+
+
+#[derive(Debug, AsRefStr, EnumString, EnumIter, PartialEq, Copy, Clone, Display, Eq, Hash, BlockEnum)] // BlockEnum
+#[display("{_variant}")]
+pub enum BlockKind {
+    // Simulation control statements
+    #[strum(serialize = "VERSION")]
+    Version,
+    #[strum(serialize = "SIMULATION")]
+    Simulation,
+    #[strum(serialize = "TOLERANCES")]
+    Tolerances,
+    #[strum(serialize = "LIMITS")]
+    Limits,
+    #[strum(serialize = "NAN_CHECK")]
+    NanCheck,
+    #[strum(serialize = "OVERWRITE_CHECK")]
+    OverwriteCheck,
+    #[strum(serialize = "TIME_REPORT")]
+    TimeReport,
+    #[strum(serialize = "CONSTANTS")]
+    #[has_lifetime]
+    Constants,
+    #[strum(serialize = "EQUATIONS")]
+    #[has_lifetime]
+    Equations,
+    #[strum(serialize = "ACCELERATE")]
+    Accelerate,
+    #[strum(serialize = "LOOP")]
+    Loop,
+    #[strum(serialize = "DFQ")]
+    Dfq,
+    #[strum(serialize = "NOCHECK")]
+    NoCheck,
+    #[strum(serialize = "EQSOLVER")]
+    EqSolver,
+    #[strum(serialize = "SOLVER")]
+    Solver,
+    #[strum(serialize = "ASSIGN")]
+    Assign,
+    #[strum(serialize = "DESIGNATE")]
+    Designate,
+    #[strum(serialize = "INCLUDE")]
+    Include,
+    #[strum(serialize = "END")]
+    End,
+    // Component definitions
+    #[strum(serialize = "UNIT")]
+    #[has_lifetime]
+    Unit,
+    // Listing control statements
+    #[strum(serialize = "WIDTH")]
+    Width,
+    #[strum(serialize = "NOLIST")]
+    NoList,
+    #[strum(serialize = "LIST")]
+    List,
+    #[strum(serialize = "MAP")]
+    Map,
+    #[strum(serialize = "CSUMMARIZE")]
+    CSummarize,
+    #[strum(serialize = "ESUMMARIZE")]
+    ESummarize,
+}
+
+
+
+
+
+
+pub trait TypedBlock{
+    fn block_kind() -> BlockKind;
+}
+
+pub trait BlockParser<'a>: Sized + Debug + TypedBlock {
+    fn try_parse_block<'b>(
+        input: &'a str,
+        raw_header: RawHeader<'a>,
+        context: &'b mut ParseContext,
+    ) -> IResult<&'a str, Commented<'a, Self>, RError>;
+    
+    fn try_parse_block_without_context(raw_header: RawHeader<'a>)  -> Result<Commented<'a, Self>, RError> {
+        let mut context = ParseContext::default();
+        let input = "";
+        let (_, result) = Self::try_parse_block(input, raw_header, &mut context)?;
+        Ok(result)
+    }
+}
+
+lazy_static! {
+    static ref BLOCK_TAGS: HashSet<String> = {
+        BlockKind::iter()
+            .map(|block_type| block_type.as_ref().to_string())
+            .collect()
+    };
+    static ref MULTILINE_BLOCK_TAGS: HashSet<String> = {
+        vec![BlockKind::Equations, BlockKind::Constants, BlockKind::Unit]
+            .iter()
+            .map(|block_type| block_type.as_ref().to_string())
+            .collect()
+    };
+    static ref SIMPLE_BLOCK_TAGS: HashSet<String> = BLOCK_TAGS.sub(&*MULTILINE_BLOCK_TAGS);
+}
+
+pub fn parse_any_block_kind<'a, I, O>(input: I) -> IResult<I, O, RError> 
+where 
+    I: Input + std::fmt::Display,
+    O: TryFrom<I>,
+    <O as TryFrom<I>>::Error: std::error::Error + Context,
+    &'a str: FindToken<<I as Input>::Item>, <I as Input>::Item: AsChar
+{
+    let mut parse_type_text = delimited(space0, is_not(" \n\t*!"), multispace1);
+    let (remaining, block_type) = parse_type_text.parse(input)?;
+    
+    let keyword = block_type.to_string();
+    
+    let block_type = O::try_from(block_type).map_err(|e| {
+        ReportWrapper::from(
+            Report::new(e).change_context(Error::UnknownKeyword {
+                keyword,
+                scope: ErrorScope::Param,
+            })
+        )
+    })?;
+
+
+    Ok((remaining, block_type))
+}
+
+impl<'a, I> Parser<I> for BlockKind
+where
+    I: nom::Input + std::fmt::Display + Clone,
+    &'a str: FindToken<<I as nom::Input>::Item>,
+    <I as nom::Input>::Item: AsChar,
+{
+    type Output = BlockKind;
+    type Error  = RError;
+
+    fn process<OM: OutputMode>(
+        &mut self,
+        input: I,
+    ) -> PResult<OM, I, Self::Output, Self::Error>
+    {
+
+        let mut parse_type_word = delimited(
+            space0, 
+            is_not(" \n\t*!"),
+            multispace1,
+        );
+
+
+        let (remaining, word) = parse_type_word.parse(input.clone()).map_err(
+            |e|
+                nom::Err::Error(
+                    OM::Error::bind(||RError::from(e))
+                )
+        )?;
+
+
+        let word_up = word.to_string().to_uppercase();
+        let parsed_kind = BlockKind::from_str(&word_up).map_err(|e| {
+            nom::Err::Error(
+                OM::Error::bind(||RError::from(
+                    Report::new(e).change_context(Error::UnknownKeyword {
+                        keyword: word_up.clone(),
+                        scope: ErrorScope::Param,
+                    })
+                ))
+            )
+        })?;
+        
+        if *self == parsed_kind {
+            Ok((remaining, OM::Output::bind(||parsed_kind)))
+        } else {
+            Err(nom::Err::Error(OM::Error::bind(||RError::new(ContentError::InvalidValue {
+                part: parsed_kind.to_string(),
+                value: word_up,
+                reason: "Block type does not match".into(),
+            }))))
+        }
+    }
+}
+
+// impl<'a, I> Parser<I> for BlockKind
+// where I: Input + std::fmt::Display, 
+//       &'a str: FindToken<<I as Input>::Item>,
+//       <I as Input>::Item: AsChar
+// {
+//     type Output = BlockKind;
+//     type Error = RError;
+// 
+//     fn process<OM: OutputMode>(&mut self, input: I) -> PResult<OM, I, Self::Output, Self::Error> {
+//         // Parse the block type as a string, and convert it to the enum variant
+//         let mut parse_type_text = delimited(space0, is_not(" \n\t*!"), multispace1);
+//         
+//         let transform_block_type = |input: I| {
+//             let (remaining, block_type) = parse_type_text.parse(input)?;
+//             let mut block_type = BlockKind::from_str(&block_type.to_string().to_uppercase()).map_err(|e| {
+//                 ReportWrapper::from(
+//                     Report::new(e).change_context(Error::UnknownKeyword {
+//                         keyword: block_type.to_string(),
+//                         scope: ErrorScope::Param,
+//                     })
+//                 )
+//             })?;
+//             
+//             if *self == block_type {
+//                 Ok((remaining, block_type))
+//             } else {
+//                 Err(nom::Err::Error(ContentError::InvalidValue {
+//                     part: block_type.to_string(),
+//                     value: block_type.to_string(),
+//                     reason: "Block type does not match".to_string(),
+//                 }))
+//             }
+//             
+//             
+//         };
+//         
+//         
+//         
+//         
+//         let (remaining, output_mode) = 
+//             parse_type_text
+//                 .and_then(|output: I|{
+//                     let block_type = BlockKind::from_str(&output.to_string().to_uppercase())
+//                         .map_err(|e| {
+//                         ReportWrapper::from(
+//                             Report::new(e).change_context(Error::UnknownKeyword {
+//                                 keyword: output.to_string(),
+//                                 scope: ErrorScope::Param,
+//                             })
+//                         )
+//                     })?;
+//                     Ok(block_type)
+//                 })
+//                 .process::<OM>(input)?
+//                 
+//             
+//         
+//         
+//     }
+// }
