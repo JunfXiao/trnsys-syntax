@@ -215,7 +215,7 @@ pub fn parse_labels(input_unit: StrUnit) -> IResult<StrUnit, (), RError> {
         parse_header_of_kind(Some(tag_no_case("Labels")), Some(1)).parse(input)?;
 
     let num: usize = header.to_vec()?[0];
-    println!("Parsing {} labels", num);
+
     let labels_parser = many_m_n(
         num,
         num,

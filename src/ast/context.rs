@@ -65,7 +65,8 @@ pub struct DocContext {
     /// 
     /// The key is the id of the block, and the value is a set of ids that this block depends on.
     dependencies: HashMap<GlobalId, HashSet<GlobalId>>,
-    reserved: HashSet<GlobalId>,
+    /// The set of reserved global ids.
+    reserved_ids: HashSet<GlobalId>,
 }
 
 
@@ -96,7 +97,7 @@ impl<'a> DocContext {
         Self {
             prev_blocks: Vec::new(),
             dependencies: HashMap::new(),
-            reserved,
+            reserved_ids: reserved,
         }
 
     }
@@ -129,7 +130,7 @@ impl<'a> DocContext {
             }));
         }
 
-        if self.reserved.contains(&self_id) {
+        if self.reserved_ids.contains(&self_id) {
             return Err(RError::new(ContentError::InvalidValue {
                 part: self_id.type_str(),
                 value: self_id.value_str(),
