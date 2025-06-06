@@ -4,19 +4,19 @@ use crate::ast::{
 };
 use crate::error::{Error, ErrorScope, RError};
 use crate::parse::{
-    BlockKind, BlockParser, map_report, op_permutation, parse_block_comment,
-    parse_commented_row, parse_header_of_kind,
+    map_report, op_permutation, parse_block_comment, parse_commented_row, parse_header_of_kind, BlockKind,
+    BlockParser,
 };
-use nom::Parser;
 use nom::bytes::complete::take_while;
-use nom::character::complete::{alphanumeric1, multispace0};
+use nom::bytes::tag_no_case;
+use nom::character::complete::multispace0;
 use nom::combinator::peek;
-use nom::combinator::{all_consuming, complete, recognize};
+use nom::combinator::{all_consuming, recognize};
 use nom::error::context;
 use nom::multi::many_m_n;
 use nom::sequence::pair;
+use nom::Parser;
 use nom::{
-    IResult,
     branch::alt,
     bytes::complete::{tag, take_while1},
     character::complete::{char, space0},
@@ -24,6 +24,7 @@ use nom::{
     multi::separated_list1,
     number::complete::double,
     sequence::{delimited, preceded, separated_pair, terminated},
+    IResult,
 };
 
 type ExprResult<'a, T> = IResult<&'a str, T, RError>;
@@ -126,20 +127,42 @@ fn parse_primary(input: &str) -> ExprResult<Expr> {
     )
     .parse(input)
 }
+macro_rules! keyword {
+    ($op:expr) => {
+        map(
+            value(
+                $op,
+                terminated(
+                    tag_no_case($op.as_ref()),
+                    peek(preceded(multispace0, char('('))),
+                ),
+            ),
+            |_| $op,
+        )
+    };
+}
 
 fn parse_unary(input: &str) -> ExprResult<Expr> {
-    // possible comments
-    // let parse_comment = opt(delimited(
-    //     space0,
-    //     opt(preceded(char('!'), not_line_ending)),
-    //     (space0, line_ending),
-    // ));
 
     let mut parse_opt_op = opt(preceded(
         space0,
         alt((
-            map(tag("-"), |_| UnaryOperator::Negate),
-            map(tag("NOT"), |_| UnaryOperator::Not),
+            // Negation operator without parentheses
+            map(tag_no_case(UnaryOperator::Negate.as_ref()), |_| UnaryOperator::Negate),
+            // Unary operators with parentheses
+            keyword!(UnaryOperator::Negate),
+            keyword!(UnaryOperator::Abs),
+            keyword!(UnaryOperator::ACos),
+            keyword!(UnaryOperator::ASin),
+            keyword!(UnaryOperator::ATan),
+            keyword!(UnaryOperator::Cos),
+            keyword!(UnaryOperator::Int),
+            keyword!(UnaryOperator::Ln),
+            keyword!(UnaryOperator::Log),
+            keyword!(UnaryOperator::Not),
+            keyword!(UnaryOperator::Sin),
+            keyword!(UnaryOperator::Tan),
+            keyword!(UnaryOperator::Exp),
         )),
     ));
 
@@ -211,7 +234,7 @@ fn expr_bp(input: &str, min_prec: u8) -> ExprResult<Expr> {
         if let Ok((after_op, op_info)) = bin_op(rest) {
             if op_info.prec < min_prec {
                 break;
-            }
+            }            
             let next_min = if op_info.right_assoc {
                 op_info.prec
             } else {
@@ -245,17 +268,6 @@ fn expr_bp(input: &str, min_prec: u8) -> ExprResult<Expr> {
     Ok((rest, lhs))
 }
 
-macro_rules! keyword {
-    ($word:literal, $op:expr) => {
-        map(
-            value(
-                $op,
-                terminated(tag($word), peek(preceded(multispace0, char('(')))),
-            ),
-            |_| $op,
-        )
-    };
-}
 
 /// Trinary
 ///
@@ -265,11 +277,11 @@ pub fn parse_trinary_call(input: &str) -> ExprResult<Expr> {
         preceded(
             space0,
             alt((
-                keyword!("AE", TrinaryOperator::AE),
-                keyword!("EQWARN", TrinaryOperator::EqWarn),
-                keyword!("GTWARN", TrinaryOperator::GtWarn),
-                keyword!("GEWARN", TrinaryOperator::GeWarn),
-                keyword!("NEWARN", TrinaryOperator::NeWarn),
+                keyword!(TrinaryOperator::AE),
+                keyword!(TrinaryOperator::EqWarn),
+                keyword!(TrinaryOperator::GtWarn),
+                keyword!(TrinaryOperator::GeWarn),
+                keyword!(TrinaryOperator::NeWarn),
             )),
         ),
         |e: RError| {
@@ -323,14 +335,17 @@ pub fn parse_binary_call(input: &str) -> ExprResult<Expr> {
     let (rest, op) = preceded(
         space0,
         alt((
-            keyword!("AND", BinaryOperator::And),
-            keyword!("OR", BinaryOperator::Or),
-            keyword!("EQ", BinaryOperator::Equal),
-            keyword!("NE", BinaryOperator::NotEqual),
-            keyword!("LT", BinaryOperator::LessThan),
-            keyword!("LE", BinaryOperator::LessThanOrEqual),
-            keyword!("GT", BinaryOperator::GreaterThan),
-            keyword!("GE", BinaryOperator::GreaterThanOrEqual),
+            keyword!(BinaryOperator::And),
+            keyword!(BinaryOperator::Or),
+            keyword!(BinaryOperator::Equal),
+            keyword!(BinaryOperator::NotEqual),
+            keyword!(BinaryOperator::LessThan),
+            keyword!(BinaryOperator::LessThanOrEqual),
+            keyword!(BinaryOperator::GreaterThan),
+            keyword!(BinaryOperator::GreaterThanOrEqual),
+            keyword!(BinaryOperator::Max),
+            keyword!(BinaryOperator::Min),
+            keyword!(BinaryOperator::Modulo),
         )),
     )
     .parse(input)?;
@@ -370,9 +385,7 @@ pub fn parse_binary_call(input: &str) -> ExprResult<Expr> {
 fn promote<'a>(
     mut parser: impl Parser<&'a str, Output = Expr, Error = RError>,
 ) -> impl Parser<&'a str, Output = Expr, Error = RError> {
-    move |input| {
-        parser.parse(input).map_err(|e| e.into())
-    }
+    move |input| parser.parse(input).map_err(|e| e.into())
 }
 
 /// Parse an expression and return the remaining input
@@ -395,16 +408,20 @@ pub fn consume_expr(input: &str) -> ExprResult<Expr> {
 }
 
 //
-fn equation_start(input: &str) -> IResult<&str, &str, RError> {
-    context(
+fn equation_start(input: &str) -> IResult<&str, Expr, RError> {
+    let (input, id) = context(
         "Equation Start",
-        delimited(
-            multispace0,
-            complete(alt((alphanumeric1, tag("_")))),
-            (space0, char('='), space0),
-        ),
+        delimited(multispace0, parse_identifier, (space0, char('='), space0)),
     )
-    .parse(input)
+    .parse(input)?;
+    if let Expr::Identifier(_) = &id {
+        Ok((input, id))
+    } else {
+        Err(nom::Err::Failure(RError::new(Error::UnexpectedContent {
+            message: "Expected an identifier for equation name".to_string(),
+            scope: ErrorScope::Expression,
+        })))
+    }
 }
 
 fn parse_eq_block(input: &str) -> IResult<&str, Commented<EquationDef>, RError> {
@@ -429,10 +446,19 @@ fn parse_eq_block(input: &str) -> IResult<&str, Commented<EquationDef>, RError> 
         None
     };
 
+    let eq_name = if let Expr::Identifier(name) = eq_name {
+        name
+    } else {
+        return Err(nom::Err::Failure(RError::new(Error::UnexpectedContent {
+            message: "Expected an identifier for equation name".to_string(),
+            scope: ErrorScope::Expression,
+        })));
+    };
+
     let (_, expr) = consume_expr(content)?;
 
     let equation = EquationDef {
-        name: eq_name.to_string(),
+        name: eq_name,
         expr,
         csummarize: c_summarize,
         esummarize: e_summarize,
@@ -562,6 +588,51 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn test_parse_unary_complex() -> Result<(), RError> {
+        let expr = "-exp(a+b)*(-c*int(d)e)";
+        let (rest, result) = consume_expr(expr)?;
+        assert!(
+            rest.is_empty(),
+            "Expected no remaining input, but got: '{}'",
+            rest
+        );
+        assert_eq!(
+            result,
+            UnaryOp {
+                op: UnaryOperator::Negate,
+                expr: Box::new(BinaryOp {
+                    op: BinaryOperator::Multiply,
+                    first: Box::new(UnaryOp {
+                        op: UnaryOperator::Exp,
+                        expr: Box::new(BinaryOp {
+                            op: BinaryOperator::Add,
+                            first: Box::new(Identifier("a".to_string())),
+                            second: Box::new(Identifier("b".to_string())),
+                        }),
+                    }),
+                    second: Box::new(UnaryOp {
+                        op: UnaryOperator::Negate,
+                        expr: Box::new(BinaryOp {
+                            op: BinaryOperator::Multiply,
+                            first: Box::new(Identifier("c".to_string())),
+                            second: Box::new(UnaryOp {
+                                op: UnaryOperator::Int,
+                                expr: Box::new(BinaryOp {
+                                    op: BinaryOperator::Multiply,
+                                    first: Box::new(Identifier("d".to_string())),
+                                    second: Box::new(Identifier("e".to_string())),
+                                }),
+                            }),
+                        }),
+                    }),
+                }),
+            }
+        );
+        Ok(())
+    }
+
 
     #[test]
     fn test_parse_unit_output() -> Result<(), RError> {

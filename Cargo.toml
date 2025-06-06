@@ -14,7 +14,6 @@ strum_macros = "0.27.1"
 derive_more = { version = "2.0.1", features = ["as_ref", "debug", "deref", "deref_mut", "display", "from", "from_str", "into", "unwrap", "try_into", "constructor", "try_from"] }
 block_enum_derive = { path = "./block_enum_derive" }
 phf = { version = "0.11.3", features = ["macros"] }
-either = "1.15.0"
 
 [workspace]
 members = [

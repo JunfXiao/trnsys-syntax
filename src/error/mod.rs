@@ -84,7 +84,7 @@ pub enum Error {
 }
 
 impl Error {
-    pub fn text(&self) -> Cow<str> {
+    pub fn input(&self) -> Cow<str> {
         match self {
             Error::UnknownKeyword { keyword,.. } => keyword.into(),
             Error::ConversionError { input, .. } => input.into(),
@@ -136,7 +136,7 @@ impl From<nom::error::Error<&str>> for Error {
 impl From<ParseIntError> for Error {
     fn from(e: ParseIntError) -> Self {
         Error::UnexpectedContent {
-            message: format!("Failed to parse integer: {:?}", e.kind()),
+            message: format!("Failed to parse integer: {:?}", e.to_string()),
             scope: ErrorScope::Param,
         }
     }

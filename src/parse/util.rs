@@ -137,6 +137,7 @@ where
     }
 }
 
+#[track_caller]
 pub fn map_report<I, O, E, P, F>(mut parser: P, mut f: F) -> impl Parser<I, Output = O, Error = E>
 where
     I: Input,
@@ -145,7 +146,8 @@ where
     F: FnMut(E) -> E,
 {
     move |input: I| {
-        parser.parse(input).map_err(|e| e.map(|e| f(e)))
+        parser.parse(input)
+            .map_err(|e| e.map(|e| f(e)))
     }
 }
 
@@ -211,17 +213,6 @@ where
             })
         },
     )
-}
-
-pub fn multiline_params<'a, I, E>(num: Option<usize>) -> impl Parser<I, Output = Vec<I>, Error = E>
-where
-    I: Input + nom::Offset,
-    E: ParseError<I>,
-    for<'b> &'b str: FindToken<<I as Input>::Item>,
-    <I as Input>::Item: AsChar,
-{
-    let spacings = " \t\n\r";
-    separated_by(num, spacings)
 }
 
 
@@ -293,7 +284,8 @@ pub fn parse_int(input: &str) -> IResult<&str, isize, RError> {
     Ok((remaining, parsed))
 }
 
-/// Parse a single mixed parameter, ends with a space, newline or a comment
+/// Parse a single mixed parameter, ends with a space, newline or a comment,
+/// quoted strings are supported.
 pub fn parse_mixed_param<'a, I, P, PO, E>(
     mut parser: P,
     separators: Option<&'a str>,
@@ -339,11 +331,12 @@ where
 
 #[cfg(test)]
 mod util_tests {
+    use nom::bytes::complete::take_till;
     use super::*;
     use crate::error::RError;
     use nom::character::anychar;
     use nom::combinator::{complete, peek};
-    use nom::multi::{many_till, many0};
+    use nom::multi::{many_till, many0, many1};
 
     #[test]
     fn test_trim() -> Result<(), RError> {
@@ -460,29 +453,7 @@ mod util_tests {
         Ok(())
     }
 
-    #[test]
-    fn test_multiline_params() -> Result<(), RError> {
-        let input = "\tparam1 \n\t\n param2\tparam3 \n param4 \r\n";
-        let mut parser = multiline_params::<&str, RError>(None);
-        let result = parser.parse(input);
-        let (remaining, output) = result?;
-        assert_eq!(remaining, "");
-        assert_eq!(output, vec!["param1", "param2", "param3", "param4"]);
 
-        Ok(())
-    }
-
-    #[test]
-    fn test_multiline_params_n() -> Result<(), RError> {
-        let input = "\tparam1 \n\t\n param2\tparam3 \n param4 \r\n";
-        let mut parser = multiline_params::<&str, RError>(Some(2));
-        let result = parser.parse(input);
-        let (remaining, output) = result?;
-        assert_eq!(remaining, "param3 \n param4 \r\n");
-        assert_eq!(output, vec!["param1", "param2"]);
-
-        Ok(())
-    }
 
     #[test]
     fn test_op_permutation_normal() -> Result<(), RError> {
@@ -538,6 +509,30 @@ mod util_tests {
         let (remaining, output) = result?;
         assert_eq!(remaining, "C");
         assert_eq!(output, (Some("A"), None));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_mixed_param() -> Result<(), RError> {
+        let input = "param1 \"param 2\" ! This is an inline comment\n! This is a block comment\n param3 ! Inline comment\nparam4";
+        let mut parser = many1(
+            preceded(
+                multispace0,
+                parse_mixed_param(
+                    take_till(|c| c == '\0'),
+                    None,
+                ),
+            )
+        );
+        let (remaining, input) = parser.parse(input)?;
+        assert!(remaining.is_empty(), "Expected no remaining input: {}", remaining);
+
+        assert_eq!(input.len(), 4, "Expected 4 parameters, got: {}", input.len());
+        assert_eq!(input[0].value, "param1");
+        assert_eq!(input[1].value, "param 2");
+        assert_eq!(input[2].value, "param3");
+        assert_eq!(input[3].value, "param4");
 
         Ok(())
     }

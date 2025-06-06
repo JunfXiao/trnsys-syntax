@@ -4,14 +4,15 @@ use crate::ast::Expr;
 
 #[derive(Debug, Error, Clone)]
 pub enum EquationError {
-    #[error("A value is divided by zero in the equation: {0}")]
-    DividedByZero(Expr),
+    #[error("A value shouldn't be zero in the equation: {0}")]
+    UnexpectedZero(Expr),
+    
 }
 
 impl EquationError {
     pub fn text(&self) -> Cow<str> {
         match self {
-            EquationError::DividedByZero(expr) => format!("{:#}", expr).into(),
+            EquationError::UnexpectedZero(expr) => format!("{:#}", expr).into(),
         }
     }
 }

@@ -59,7 +59,7 @@ pub enum BlockKind {
     TimeReport,
     #[strum(serialize = "CONSTANTS")]
     Constants,
-    #[strum(serialize = "EQUATIONS")]
+    #[strum(serialize = "EQUATIONS", serialize = "EQU")]
     Equations,
     #[strum(serialize = "ACCELERATE")]
     Accelerate,

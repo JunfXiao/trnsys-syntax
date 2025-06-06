@@ -1,15 +1,15 @@
-use std::borrow::Cow;
-use super::{parse_block_comment, parse_inline_values_strict};
+use super::{map_report, parse_block_comment, parse_inline_values_strict};
 use crate::ast::Comments;
-use crate::error::{ContentError, Error, ErrorScope, RError, StdError};
+use crate::error::{ContentError, Error, RError, StdError};
 use crate::parse::{
-    BlockKind, StrRef, TryFromStr, parse_any_block_kind, parse_commented_row, parse_inline_values,
+    parse_any_block_kind, parse_commented_row, parse_inline_values, BlockKind, StrRef, TryFromStr,
 };
 use derive_more::Display;
 use error_stack::{Context, Report};
 use nom::character::complete::multispace0;
 use nom::combinator::complete;
 use nom::{AsChar, FindToken, IResult, Input, Parser};
+use std::borrow::Cow;
 use std::fmt::{Debug, Display};
 
 #[derive(Debug, Clone, Display)]
@@ -58,13 +58,9 @@ where
             .map(move |v| {
                 let v_str = format!("{:?}", v);
                 f(v).map_err(|e| {
-                    Report::new(e).change_context(Error::UnexpectedContent {
-                        message: format!(
-                            "Could not convert \"{}\" to {:?}",
-                            v_str,
-                            std::any::type_name::<U>()
-                        ),
-                        scope: ErrorScope::Param,
+                    Report::new(e).change_context(Error::ConversionError {
+                        input: v_str,
+                        target: std::any::type_name::<U>().to_string(),
                     })
                 })
             })
@@ -84,13 +80,9 @@ where
             .map(move |v| {
                 let v_str = format!("{:?}", v);
                 f(v).map_err(|e| {
-                    Report::new(e).change_context(Error::UnexpectedContent {
-                        message: format!(
-                            "Could not convert \"{}\" to {:?}",
-                            v_str,
-                            std::any::type_name::<U>()
-                        ),
-                        scope: ErrorScope::Param,
+                    Report::new(e).change_context(Error::ConversionError {
+                        input: v_str,
+                        target: std::any::type_name::<U>().to_string(),
                     })
                 })
             })
@@ -133,7 +125,11 @@ where
 /// Parse a simple one-line header WITHOUT its Keyword.
 ///
 pub fn parse_header(input: &str) -> IResult<&str, RawHeader, RError> {
-    parse_header_of_kind(Some(parse_any_block_kind), None).parse(input)
+    map_report(
+        parse_header_of_kind(Some(parse_any_block_kind), None),
+        |e| e.attach_printable("Invalid block header.")
+    )
+    .parse(input)
 }
 
 /// Parse a simple one-line header with its Keyword.

@@ -1,4 +1,4 @@
-use super::{BitBool, Block, BlockKind, BlockParser, GlobalId, DocContext, RawHeader, StrUnit, TryFromStr, TypedBlock, parse_block_comment, parse_derivatives, parse_equations, parse_etrace, parse_header, parse_inputs, parse_int, parse_parameters, parse_trace, parse_unit_format, parse_literal_or_identifier};
+use super::{BitBool, Block, BlockKind, BlockParser, DocContext, GlobalId, RawHeader, StrUnit, TryFromStr, TypedBlock, parse_block_comment, parse_derivatives, parse_equations, parse_etrace, parse_header, parse_inputs, parse_int, parse_literal_or_identifier, parse_parameters, parse_trace, parse_unit_format, parse_labels};
 use crate::ast::*;
 use crate::error::{ContentError, Error, RError, ReportWrapper};
 use nom::IResult;
@@ -30,13 +30,10 @@ pub fn parse_commented_block<'a>(
     Ok((input, block))
 }
 
-pub fn parse_block<'a>(
-    input: (&'a str, &mut DocContext),
-) -> IResult<&'a str, Block, RError> {
+pub fn parse_block<'a>(input: (&'a str, &mut DocContext)) -> IResult<&'a str, Block, RError> {
     let (input, context) = input;
 
-    let (input, block_header) =
-        complete(parse_header).parse(input)?;
+    let (input, block_header) = complete(parse_header).parse(input)?;
     let (input, block) = Block::try_parse(input, block_header, context)?;
     Ok((input, block))
 }
@@ -64,24 +61,24 @@ impl<'a> BlockParser<'a> for Simulation {
         raw_header.ensure_len(3)?;
         let transformed = raw_header.transform(parse_literal_or_identifier)?;
         let [t_0, t_f, dt] = transformed.try_into().unwrap();
-        if let Expr::Literal(t_0) = &t_0{
-            if  *t_0 < 0.0{
+        if let Expr::Literal(t_0) = &t_0 {
+            if *t_0 < 0.0 {
                 return Err(RError::new(ContentError::InvalidValue {
                     part: "t_0".to_string(),
                     value: t_0.to_string(),
                     reason: "t_0 must be greater than or equal to 0".to_string(),
                 })
-                    .into());
+                .into());
             }
 
-            if let Expr::Literal(t_f) = &t_f{
+            if let Expr::Literal(t_f) = &t_f {
                 if t_f <= t_0 {
                     return Err(RError::new(ContentError::InvalidValue {
                         part: "t_f".to_string(),
                         value: t_f.to_string(),
                         reason: "t_f must be greater than t_0".to_string(),
                     })
-                        .into());
+                    .into());
                 }
             }
 
@@ -92,7 +89,7 @@ impl<'a> BlockParser<'a> for Simulation {
                         value: dt.to_string(),
                         reason: "dt must be greater than 0".to_string(),
                     })
-                        .into());
+                    .into());
                 }
             }
         }
@@ -107,9 +104,8 @@ impl<'a> BlockParser<'a> for Tolerances {
         raw_header: RawHeader,
         context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
-        
         context.ensure_unique(Self::block_kind())?;
-        
+
         raw_header.ensure_len(2)?;
         let transformed = raw_header.to_vec::<f64>()?;
         let [tol_integration, tol_convergence] = transformed.try_into().unwrap();
@@ -151,16 +147,21 @@ impl<'a> BlockParser<'a> for Limits {
         if transformed.len() > 2 {
             limit_trace = Some(transformed.pop().unwrap());
         }
-        let [max_iter, max_warning] = transformed.into_iter().take(2).collect::<Vec<_>>().try_into().unwrap();
+        let [max_iter, max_warning] = transformed
+            .into_iter()
+            .take(2)
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
 
-        if let Ok(Some(max_iter)) = max_iter.evaluate(){
-            if max_iter.fract() != 0.0{
+        if let Ok(Some(max_iter)) = max_iter.evaluate() {
+            if max_iter.fract() != 0.0 {
                 return Err(RError::new(ContentError::InvalidValue {
                     part: "max_iter".to_string(),
                     value: max_iter.to_string(),
                     reason: "Maximum number of iterations must be an integer".to_string(),
                 })
-                    .into());
+                .into());
             }
             if max_iter < 0.0 {
                 return Err(RError::new(ContentError::InvalidValue {
@@ -168,18 +169,18 @@ impl<'a> BlockParser<'a> for Limits {
                     value: max_iter.to_string(),
                     reason: "Maximum number of iterations must be greater than 0".to_string(),
                 })
-                    .into());
+                .into());
             }
         }
 
-        if let Ok(Some(max_warning)) = max_warning.evaluate(){
-            if max_warning.fract() != 0.0{
+        if let Ok(Some(max_warning)) = max_warning.evaluate() {
+            if max_warning.fract() != 0.0 {
                 return Err(RError::new(ContentError::InvalidValue {
                     part: "max_warning".to_string(),
                     value: max_iter.to_string(),
                     reason: "Maximum number of warnings must be an integer".to_string(),
                 })
-                    .into());
+                .into());
             }
             if max_warning < 0. {
                 return Err(RError::new(ContentError::InvalidValue {
@@ -187,10 +188,9 @@ impl<'a> BlockParser<'a> for Limits {
                     value: max_warning.to_string(),
                     reason: "Maximum number of warnings must be greater than 0".to_string(),
                 })
-                    .into());
+                .into());
             }
         }
-
 
         if let Some(limit_trace) = &limit_trace {
             if let Ok(Some(limit_trace)) = limit_trace.evaluate() {
@@ -272,35 +272,26 @@ impl<'a> BlockParser<'a> for Constants {
         let [num_constants] = raw_header.to_vec::<usize>()?.try_into().unwrap();
 
         let (input, expressions) = parse_equations(num_constants).parse(input)?;
-        
-        
-        for expr in &expressions {
 
+        for expr in &expressions {
             let (identifiers, unit_outputs) = expr.expr.dependencies();
             let dependencies = identifiers
                 .iter()
                 .map(|id| GlobalId::Variable(id.to_string()))
                 .collect::<Vec<_>>();
-            
+
             if !unit_outputs.is_empty() {
-                return Err(
-                    RError::new(ContentError::InvalidValue {
-                        part: "Constants".to_string(),
-                        value: expr.name.to_string(),
-                        reason: "Constants cannot have unit outputs".to_string(),
-                    }
-                ));
+                return Err(RError::new(ContentError::InvalidValue {
+                    part: "Constants".to_string(),
+                    value: expr.name.to_string(),
+                    reason: "Constants cannot have unit outputs".to_string(),
+                }));
             }
             // TODO: Ensure it's dependencies are all constants
-            
-            context.register_dep(
-                GlobalId::Variable(expr.name.clone()),
-                Some(dependencies))?;
-            
-            
 
+            context.register_dep(GlobalId::Variable(expr.name.clone()), Some(dependencies))?;
         }
-        
+
         let mut block = Constants::default();
         block.definitions = expressions;
 
@@ -800,6 +791,7 @@ impl<'a> BlockParser<'a> for Unit {
 
         let (str_unit, _) = many0(complete(alt((
             parse_inputs,
+            parse_labels,
             parse_derivatives,
             parse_trace,
             parse_etrace,
@@ -856,7 +848,6 @@ impl<'a> BlockParser<'a> for NoList {
         raw_header: RawHeader,
         _context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
-
         raw_header.ensure_len(0)?;
 
         Ok((input, NoList().into()))

@@ -1,11 +1,10 @@
 // src/ast/component.rs
-use super::{Expr, Assign, Designate, Commented};
+use super::{Assign, Commented, Designate, Expr};
+use derive_more::with_trait::Constructor;
+use derive_more::{Display, From};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
-use derive_more::{Display, From};
-use derive_more::with_trait::Constructor;
-use serde::{Deserialize, Serialize};
-use either::Either;
 
 /// UNIT n TYPE m SOME COMMENTS
 #[derive(Debug, Display, Clone, Default)]
@@ -15,10 +14,8 @@ pub struct Unit {
     pub type_number: u32,
     pub unit_name: String,
     pub parameters: Option<Vec<Commented<Expr>>>,
-    pub inputs: Option<Either<
-        Vec<UnitInput<WithInitVal>>,
-        Vec<UnitInput<WithLabel>>
-    >>,
+    pub inputs: Option<Vec<UnitInput>>,
+    pub labels: Option<Vec<Commented<String>>>,
     pub derivatives: Option<Vec<Commented<Expr>>>,
     pub trace: Option<Commented<Trace>>,
     pub etrace: Option<Commented<Trace>>,
@@ -46,11 +43,12 @@ impl InputMode for WithLabel {
     type Field = Commented<String>;
 }
 
-/// INPUTS n u1,o1 u2,o2 ... un,on v1 v2 ... vn [labels for printers/plotters]
+/// INPUTS n u1,o1 u2,o2 ... un,on v1 v2 ... vn
 #[derive(Debug, Clone, Constructor)]
-pub struct UnitInput<IM: InputMode> {
+pub struct UnitInput {
     pub connection: Commented<Expr>,
-    pub extra_data: IM::Field,
+    /// The initial value for the input
+    pub initial: Commented<Expr>,
 }
 
 

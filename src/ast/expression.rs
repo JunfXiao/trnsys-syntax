@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::iter;
-use strum_macros::{Display, EnumString};
+use strum_macros::{AsRefStr, Display, EnumString};
 
 /// Represents a mathematical or logical expression
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -76,7 +76,7 @@ impl Expr {
                 if op == &BinaryOperator::Divide {
                     if let Ok(Some(right_value)) = second.evaluate() {
                         if right_value == 0.0 {
-                            return Err(Report::new(EquationError::DividedByZero(self.clone()).into()));
+                            return Err(Report::new(EquationError::UnexpectedZero(self.clone()).into()));
                         }
                     }
                 }
@@ -200,8 +200,112 @@ pub trait Operator<T> {
     fn evaluate(&self, value: T) -> ParseResult<f64, ContentError>;
 }
 
+/// Unary operators in expressions
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumString, Display, AsRefStr)]
+pub enum UnaryOperator {
+    #[strum(serialize = "-")]
+    Negate,
+    #[strum(serialize = "ABS")]
+    Abs,
+    #[strum(serialize = "ACOS")]
+    ACos,
+    #[strum(serialize = "ASIN")]
+    ASin,
+    #[strum(serialize = "ATAN")]
+    ATan,
+    #[strum(serialize = "COS")]
+    Cos,
+    #[strum(serialize = "INT")]
+    /// Convert to integer
+    Int,
+    #[strum(serialize = "LN")]
+    Ln,
+    #[strum(serialize = "LOG")]
+    Log,
+    #[strum(serialize = "NOT")]
+    Not,
+    #[strum(serialize = "SIN")]
+    Sin,
+    #[strum(serialize = "TAN")]
+    Tan,
+    #[strum(serialize = "EXP")]
+    Exp,
+}
+
+impl Operator<f64> for UnaryOperator {
+    fn evaluate(&self, value: f64) -> ParseResult<f64, ContentError> {
+        match self {
+            UnaryOperator::Negate => Ok(-value),
+            UnaryOperator::Not => Ok(if value == 0.0 { 1.0 } else { 0.0 }),
+            UnaryOperator::Abs => Ok(value.abs()),
+            UnaryOperator::ACos => {
+                if value < -1.0 || value > 1.0 {
+                    Err(Report::new(ContentError::InvalidValue {
+                        part: "ACos".to_string(),
+                        value: value.to_string(),
+                        reason: "ACos only accepts value in range [-1, 1]".to_string(),
+                    }.into()).attach_printable(self.clone()))
+                } else {
+                    Ok(value.acos())
+                }
+            },
+            UnaryOperator::ASin => {
+                if value < -1.0 || value > 1.0 {
+                    Err(Report::new(ContentError::InvalidValue {
+                        part: "Asin".to_string(),
+                        value: value.to_string(),
+                        reason: "Asin only accepts value in range [-1, 1]".to_string(),
+                    }.into()).attach_printable(self.clone()))
+                } else {
+                    Ok(value.asin())
+                }
+            },
+            UnaryOperator::ATan => Ok(value.atan()),
+            UnaryOperator::Cos => Ok(value.cos()),
+            UnaryOperator::Int => {
+                if value.is_nan() {
+                    Err(Report::new(ContentError::InvalidValue {
+                        part: "Int".to_string(),
+                        value: value.to_string(),
+                        reason: "Cannot convert NaN to integer".to_string(),
+                    }.into()).attach_printable(self.clone()))
+                } else {
+                    Ok(value.trunc())
+                }
+            },
+            UnaryOperator::Ln => {
+                if value <= 0.0 {
+                    Err(Report::new(ContentError::InvalidValue {
+                        part: "Ln".to_string(),
+                        value: value.to_string(),
+                        reason: "Ln only accepts positive values".to_string(),
+                    }.into()).attach_printable(self.clone()))
+                } else {
+                    Ok(value.ln())
+                }
+            },
+            UnaryOperator::Log => {
+                if value <= 0.0 {
+                    Err(Report::new(ContentError::InvalidValue {
+                        part: "Log".to_string(),
+                        value: value.to_string(),
+                        reason: "Log only accepts positive values".to_string(),
+                    }.into()).attach_printable(self.clone()))
+                } else {
+                    Ok(value.log10())
+                }
+            },
+            UnaryOperator::Sin => Ok(value.sin()),
+            UnaryOperator::Tan => Ok(value.tan()),
+            UnaryOperator::Exp => Ok(value.exp()),
+
+        }
+    }
+}
+
+
 /// Binary operators in expressions
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, EnumString, Display, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, EnumString, Display, AsRefStr, Copy)]
 pub enum BinaryOperator {
     #[strum(serialize = "+")]
     Add,
@@ -218,7 +322,7 @@ pub enum BinaryOperator {
     And,
     #[strum(serialize = "OR")]
     Or,
-    #[strum(serialize = "EQ")]
+    #[strum(serialize = "EQL")]
     Equal,
     #[strum(serialize = "NE")]
     NotEqual,
@@ -230,6 +334,12 @@ pub enum BinaryOperator {
     GreaterThan,
     #[strum(serialize = "GE")]
     GreaterThanOrEqual,
+    #[strum(serialize = "MIN")]
+    Min,
+    #[strum(serialize = "MAX")]
+    Max,
+    #[strum(serialize = "MOD")]
+    Modulo,
 }
 
 impl Operator<(f64, f64)> for BinaryOperator {
@@ -241,14 +351,14 @@ impl Operator<(f64, f64)> for BinaryOperator {
             BinaryOperator::Multiply => Ok(left * right),
             BinaryOperator::Divide => {
                 if right == 0.0 {
-                    Err(Report::new(EquationError::DividedByZero(
+                    Err(Report::new(EquationError::UnexpectedZero(
                         Expr::BinaryOp {
-                            op: BinaryOperator::Divide,
+                            op: BinaryOperator::Modulo,
                             first: Box::new(Expr::Literal(left)),
                             second: Box::new(Expr::Literal(right)),
                         }
                     ).into())
-                        .attach_printable(format!("Formula: {} / {}", left, right)))
+                        .attach_printable(format!("Formula: {} % {}", left, right)))
                 } else {
                     Ok(left / right)
                 }
@@ -271,30 +381,29 @@ impl Operator<(f64, f64)> for BinaryOperator {
             BinaryOperator::LessThanOrEqual => Ok(if left <= right { 1.0 } else { 0.0 }),
             BinaryOperator::GreaterThan => Ok(if left > right { 1.0 } else { 0.0 }),
             BinaryOperator::GreaterThanOrEqual => Ok(if left >= right { 1.0 } else { 0.0 }),
+            BinaryOperator::Min => Ok(left.min(right)),
+            BinaryOperator::Max => Ok(left.max(right)),
+            BinaryOperator::Modulo => {
+                if right == 0.0 {
+                    Err(Report::new(EquationError::UnexpectedZero(
+                        Expr::BinaryOp {
+                            op: BinaryOperator::Modulo,
+                            first: Box::new(Expr::Literal(left)),
+                            second: Box::new(Expr::Literal(right)),
+                        }
+                    ).into())
+                        .attach_printable(format!("Formula: {} % {}", left, right)))
+                } else {
+                    Ok(left % right)
+                }
+            },
         }
     }
 }
 
-/// Unary operators in expressions
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumString, Display)]
-pub enum UnaryOperator {
-    #[strum(serialize = "-")]
-    Negate,
-    #[strum(serialize = "NOT")]
-    Not,
-}
-
-impl Operator<f64> for UnaryOperator {
-    fn evaluate(&self, value: f64) -> ParseResult<f64, ContentError> {
-        match self {
-            UnaryOperator::Negate => Ok(-value),
-            UnaryOperator::Not => Ok(if value == 0.0 { 1.0 } else { 0.0 }),
-        }
-    }
-}
 
 /// Trinary operators in expressions
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumString, Display)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumString, Display, AsRefStr)]
 pub enum TrinaryOperator {
     /// If the absolute error between the first two arguments is less than the third argument, return 1, otherwise 0.
     #[strum(serialize = "AE")]

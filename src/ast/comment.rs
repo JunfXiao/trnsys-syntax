@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display, Formatter};
 
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, Display)]
+#[derive(Clone, Serialize, Deserialize, Default, Display)]
 #[display("Pre: {comment_pre:#?}, \nPost: {comment_post:#?}, Inline: \n{comment_inline:#?}")]
 pub struct Comments {
     pub comment_inline: Option<String>,
@@ -21,6 +21,26 @@ impl Comments {
             comment_pre: None,
             comment_post: None,
         }
+    }
+}
+
+impl Debug for Comments {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut ds = f.debug_struct("Comments");
+        
+        if let Some(inline) = &self.comment_inline {
+            ds.field("comment_inline", inline);
+        }
+        if let Some(pre) = &self.comment_pre {
+            ds.field("comment_pre", pre);
+        }
+        if let Some(post) = &self.comment_post {
+            ds.field("comment_post", post);
+        }
+        
+        
+        
+        ds.finish()
     }
 }
 

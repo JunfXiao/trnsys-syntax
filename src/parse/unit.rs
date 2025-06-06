@@ -3,21 +3,19 @@ use crate::error::{ContentError, Error, RError};
 use crate::parse::{
     map_report, parse_header_of_kind,
     parse_identifier, parse_literal, parse_mixed_param, parse_unconnected,
-    parse_unit_output, quoted,
+    parse_unit_output,
 };
 use derive_more::Display;
-use either::Either;
 use nom::branch::alt;
+use nom::bytes::complete::take_till;
 use nom::bytes::{tag_no_case, take_until};
 use nom::character::complete::multispace0;
-use nom::combinator::eof;
 use nom::multi::many_m_n;
-use nom::sequence::{delimited, preceded};
+use nom::sequence::preceded;
 use nom::{IResult, Input, Needed, Parser};
-use phf::{Set, phf_set};
+use phf::{phf_set, Set};
 use std::cell::{Ref, RefCell, RefMut};
 use std::rc::Rc;
-use nom::bytes::complete::is_not;
 
 #[derive(Debug, Display, Clone)]
 #[display("Unit {} of Type {}", self.1.as_ref().borrow().number, self.1.as_ref().borrow().type_number)]
@@ -133,7 +131,7 @@ pub fn parse_parameters(input_unit: StrUnit) -> IResult<StrUnit, (), RError> {
     Ok((StrUnit(input, input_unit.1.clone()), ()))
 }
 
-pub static TYPE_WITH_LABELS: Set<u32> = phf_set! {25u32,26u32,27u32,65u32};
+pub static TYPE_WITH_LABELS: Set<u32> = phf_set! {25u32,26u32,27u32,46u32,65u32};
 
 pub fn parse_inputs(input_unit: StrUnit) -> IResult<StrUnit, (), RError> {
     let mut unit = input_unit.unit_mut();
@@ -189,75 +187,63 @@ pub fn parse_inputs(input_unit: StrUnit) -> IResult<StrUnit, (), RError> {
     .parse(input)?;
 
 
-    // Parse initial values or labels
+    // Parse initial values
 
-    let input = if TYPE_WITH_LABELS.contains(&unit.type_number) {
-        let (input, labels) = parse_input_labels(param_num).parse(input)?;
-        unit.inputs = Some(Either::Right(
-            input_conns
-                .into_iter()
-                .zip(labels)
-                .map(|(conn, label)| {
-                    UnitInput::new(
-                        conn,
-                        Commented::new(label.value.to_string(), label.comments),
-                    )
-                })
-                .collect::<Vec<_>>(),
-        ));
-        input
-    } else {
-        let (input, init_values) = parse_input_init_values(param_num).parse(input)?;
-        unit.inputs = Some(Either::Left(
-            input_conns
-                .into_iter()
-                .zip(init_values)
-                .map(|(conn, label)| UnitInput::new(conn, label))
-                .collect::<Vec<_>>(),
-        ));
-        input
-    };
+    let (input, init_values) = parse_input_init_values(param_num).parse(input)?;
+    unit.inputs = Some(input_conns
+        .into_iter()
+        .zip(init_values)
+        .map(|(conn, label)| UnitInput::new(conn, label))
+        .collect::<Vec<_>>());
 
     Ok((StrUnit(input, input_unit.1.clone()), ()))
 }
 
-fn parse_input_labels<'a>(
-    num: usize,
-) -> impl Parser<&'a str, Output = Vec<Commented<&'a str>>, Error = RError> {
-    move |input: &'a str| {
-        let parser = many_m_n(
-            num,
-            num,
-            preceded(
-                multispace0,
-                parse_mixed_param(
-                    alt((
-                        quoted,
-                        delimited(
-                            multispace0,
-                            is_not(" \t\r\n!"),
-                            alt((multispace0, eof)),
-                        ),
-                    )),
-                    None,
-                ),
+pub fn parse_labels(input_unit: StrUnit) -> IResult<StrUnit, (), RError> {
+    let mut unit = input_unit.unit_mut();
+    let input = input_unit.0;
+
+    if unit.labels.is_some() {
+        return Err(nom::Err::Error(RError::new(
+            ContentError::DuplicateDefinition {
+                name: "Labels".to_string(),
+            },
+        )));
+    }
+
+    let (input, header) =
+        parse_header_of_kind(Some(tag_no_case("Labels")), Some(1)).parse(input)?;
+
+    let num: usize = header.to_vec()?[0];
+    println!("Parsing {} labels", num);
+    let labels_parser = many_m_n(
+        num,
+        num,
+        preceded(
+            multispace0,
+            parse_mixed_param(
+                take_till(|c| c == '\0'),
+                None,
             ),
-        );
-        let (input, labels) = map_report(parser, |e: RError| {
-            e.change_context(
-                ContentError::InvalidValue {
-                    value: "Labels".to_string(),
-                    reason: format!("{} labels expected, but couldn't parse such many.", num),
-                    part: "Inputs".to_string(),
-                }
+        ),
+    );
+    let (input, labels) = map_report(labels_parser, |e: RError| {
+        e.change_context(
+            ContentError::InvalidValue {
+                value: "Labels".to_string(),
+                reason: format!("{} labels expected, but couldn't parse such many.", num),
+                part: "Inputs".to_string(),
+            }
                 .into(),
-            )
-        })
+        )
+    })
         .parse(input)?;
 
-        Ok((input, labels))
-    }
+    unit.labels = Some(labels.into_iter().map(|s|Commented::new(s.value.to_string(), s.comments)).collect());
+
+    Ok((StrUnit(input, input_unit.1.clone()), ()))
 }
+
 
 fn parse_input_init_values<'a>(
     num: usize,
@@ -436,10 +422,9 @@ pub fn parse_unit_format(input_unit: StrUnit) -> IResult<StrUnit, (), RError> {
 
 #[cfg(test)]
 mod tests {
-    
     use super::*;
     use crate::ast::{Unit, UnitConnection};
-    use crate::parse::{DocContext, parse_commented_block, Block};
+    use crate::parse::{parse_commented_block, Block, DocContext};
 
     #[test]
     fn test_parse_parameters() -> Result<(), RError> {
@@ -502,9 +487,7 @@ mod tests {
         let inputs = inputs
             .as_mut()
             .unwrap()
-            .clone()
-            .left()
-            .expect("Expected inputs to be with initial values in left variant");
+            .clone();
 
         assert_eq!(inputs.len(), 3);
         assert_eq!(
@@ -517,63 +500,12 @@ mod tests {
             Expr::Identifier("STOP".to_string())
         );
 
-        assert_eq!(inputs[0].extra_data.value, Expr::Literal(1.0));
-        assert_eq!(inputs[1].extra_data.value, Expr::Literal(2.0));
+        assert_eq!(inputs[0].initial.value, Expr::Literal(1.0));
+        assert_eq!(inputs[1].initial.value, Expr::Literal(2.0));
         assert_eq!(
-            inputs[2].extra_data.value,
+            inputs[2].initial.value,
             Expr::Identifier("START".to_string())
         );
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_parse_input_with_labels() -> Result<(), RError> {
-        let input = "
-        ! Pre comment 1
-        INPUTS 3
-        ! Inline comment
-        1,2 0,0 STOP
-        *** Labels for printers/plotters
-        Label1 Label2 ! Comment for Label2
-        Label3 ! Comment for Label3
-        ";
-
-        let mut unit = Unit::default();
-        unit.type_number = *TYPE_WITH_LABELS.iter().next().unwrap();
-        let input_unit = StrUnit::new(input, unit);
-        let (input_unit, _) = parse_inputs(input_unit)?;
-        let input = input_unit.0;
-        let mut unit = input_unit.unit_mut();
-
-        assert!(
-            input.trim().is_empty(),
-            "Input not fully consumed: `{}`",
-            input
-        );
-        let inputs = &mut unit.inputs;
-        assert!(inputs.is_some());
-        let inputs = inputs
-            .as_mut()
-            .unwrap()
-            .clone()
-            .right()
-            .expect("Expected inputs to be with labels in right variant");
-
-        assert_eq!(inputs.len(), 3);
-        assert_eq!(
-            inputs[0].connection.value,
-            Expr::UnitOutput(UnitConnection::new(1, 2))
-        );
-        assert_eq!(inputs[1].connection.value, Expr::Unconnected);
-        assert_eq!(
-            inputs[2].connection.value,
-            Expr::Identifier("STOP".to_string())
-        );
-
-        assert_eq!(inputs[0].extra_data.value, "Label1");
-        assert_eq!(inputs[1].extra_data.value, "Label2");
-        assert_eq!(inputs[2].extra_data.value, "Label3");
 
         Ok(())
     }
@@ -613,12 +545,28 @@ Derivatives 3
     #[test]
     fn test_parse_input_labels() -> Result<(), RError> {
         let input = r#"
+        LABELS 3
         *** Labels for printers/plotters
-        Label1 Label2 ! Comment for Label2
+        Label1 "Label 2" ! Comment for Label2
         Label3 ! Comment for Label3
         "#;
-        let labels = parse_input_labels(3).parse(input)?;
+
+        let unit = Unit::default();
+        let input_unit = StrUnit::new(input, unit);
+        let (input_unit, _) = parse_labels(input_unit)?;
+        let input = input_unit.0;
+        let mut unit = input_unit.unit_mut();
+        let labels = unit.labels.as_ref().expect("Expected labels");
         println!("{:?}", labels);
+        assert!(
+            input.trim().is_empty(),
+            "Input not fully consumed: `{}`",
+            input
+        );
+        assert_eq!(labels.len(), 3);
+        assert_eq!(labels[0].value, "Label1");
+        assert_eq!(labels[1].value, "Label 2");
+        assert_eq!(labels[2].value, "Label3");
         Ok(())
     }
     #[test]
@@ -696,12 +644,15 @@ INPUTS 1
 3,1		! [unconnected] Input
 *** INITIAL INPUT VALUES
 0. 
+LABELS 1
+"!AB*CD"	! Label for input
 ! POST COMMENTS
 *------------------------------------------------------------------------------
         "#;
         let mut context = DocContext::new();
         let (input, block) = parse_commented_block((input, &mut context))?;
-        assert!(input.trim().is_empty());
+        assert!(input.trim().is_empty(), 
+            "Input not fully consumed: `{}`", input);
         // to Block::Unit(Unit) Struct
         let Block::Unit(unit) = block else {
             panic!("Expected a Unit block, found: {:?}", block);
@@ -709,8 +660,10 @@ INPUTS 1
         assert_eq!(unit.number, 3);
         assert_eq!(unit.type_number, 55);
         assert_eq!(unit.unit_name, "Type55");
-        assert_eq!(unit.inputs.as_ref().unwrap().as_ref().left().unwrap().len(), 1);
-        assert_eq!(unit.parameters.as_ref().unwrap().len(), 7);
+        assert_eq!(unit.inputs.as_ref().unwrap().len(), 1);
+        assert_eq!(unit.inputs.as_ref().unwrap()[0].connection.value, Expr::UnitOutput(UnitConnection::new(3, 1)));
+        assert_eq!(unit.labels.as_ref().unwrap().len(), 1);
+        assert_eq!(unit.labels.as_ref().unwrap()[0].value, "!AB*CD");
         
         
         println!("{:#?}", unit);
