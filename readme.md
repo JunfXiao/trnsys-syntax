@@ -15,8 +15,7 @@ support additional features such as validation, output generation, and more.
 - [x] Tests
 - [ ] Validation of references and expressions
 - [ ] Output Generation & Create from Zero
+- [ ] TRNSEED Support
 - [ ] Benchmarks
 - [ ] Python Binding
 
-# Known Issues
-- Constants are not fully supported as parameter, e.g. for `NAN_CHECK`

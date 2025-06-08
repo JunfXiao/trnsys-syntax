@@ -4,9 +4,10 @@ use crate::ast::{
 };
 use crate::error::{Error, ErrorScope, RError};
 use crate::parse::{
-    map_report, op_permutation, parse_block_comment, parse_commented_row, parse_header_of_kind, BlockKind,
-    BlockParser,
+    BlockKind, BlockParser, map_report, op_permutation, parse_block_comment, parse_commented_row,
+    parse_header_of_kind,
 };
+use nom::Parser;
 use nom::bytes::complete::take_while;
 use nom::bytes::tag_no_case;
 use nom::character::complete::multispace0;
@@ -15,8 +16,8 @@ use nom::combinator::{all_consuming, recognize};
 use nom::error::context;
 use nom::multi::many_m_n;
 use nom::sequence::pair;
-use nom::Parser;
 use nom::{
+    IResult,
     branch::alt,
     bytes::complete::{tag, take_while1},
     character::complete::{char, space0},
@@ -24,7 +25,6 @@ use nom::{
     multi::separated_list1,
     number::complete::double,
     sequence::{delimited, preceded, separated_pair, terminated},
-    IResult,
 };
 
 type ExprResult<'a, T> = IResult<&'a str, T, RError>;
@@ -143,12 +143,13 @@ macro_rules! keyword {
 }
 
 fn parse_unary(input: &str) -> ExprResult<Expr> {
-
     let mut parse_opt_op = opt(preceded(
         space0,
         alt((
             // Negation operator without parentheses
-            map(tag_no_case(UnaryOperator::Negate.as_ref()), |_| UnaryOperator::Negate),
+            map(tag_no_case(UnaryOperator::Negate.as_ref()), |_| {
+                UnaryOperator::Negate
+            }),
             // Unary operators with parentheses
             keyword!(UnaryOperator::Negate),
             keyword!(UnaryOperator::Abs),
@@ -234,7 +235,7 @@ fn expr_bp(input: &str, min_prec: u8) -> ExprResult<Expr> {
         if let Ok((after_op, op_info)) = bin_op(rest) {
             if op_info.prec < min_prec {
                 break;
-            }            
+            }
             let next_min = if op_info.right_assoc {
                 op_info.prec
             } else {
@@ -267,7 +268,6 @@ fn expr_bp(input: &str, min_prec: u8) -> ExprResult<Expr> {
     }
     Ok((rest, lhs))
 }
-
 
 /// Trinary
 ///
@@ -435,13 +435,13 @@ fn parse_eq_block(input: &str) -> IResult<&str, Commented<EquationDef>, RError> 
     .parse(input)?;
 
     let c_summarize: Option<Commented<CSummarize>> = if let Some(header) = cs_header {
-        Some(CSummarize::try_parse_block_without_context(header)?)
+        Some(CSummarize::try_parse_block_by_header(header)?)
     } else {
         None
     };
 
     let e_summarize: Option<Commented<ESummarize>> = if let Some(header) = es_header {
-        Some(ESummarize::try_parse_block_without_context(header)?)
+        Some(ESummarize::try_parse_block_by_header(header)?)
     } else {
         None
     };
@@ -632,7 +632,6 @@ mod tests {
         );
         Ok(())
     }
-
 
     #[test]
     fn test_parse_unit_output() -> Result<(), RError> {

@@ -1,12 +1,12 @@
-use std::fmt::{Display, Formatter};
+use crate::ast::{CSummarize, Commented, ESummarize, Expr, Metadata};
 use derive_more::Constructor;
 use serde::{Deserialize, Serialize};
-use crate::ast::{CSummarize, Commented, ESummarize, Expr, Metadata};
+use std::fmt::{Display, Formatter};
 
-#[derive(Debug, Clone, Constructor, Default)]
+#[derive(Debug, Clone, Constructor, Default, Serialize, Deserialize)]
 pub struct Equations {
     pub metadata: Metadata,
-    pub definitions: Vec<Commented<EquationDef>>
+    pub definitions: Vec<Commented<EquationDef>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -14,7 +14,7 @@ pub struct EquationDef {
     pub name: String,
     pub expr: Expr,
     pub csummarize: Option<Commented<CSummarize>>,
-    pub esummarize: Option<Commented<ESummarize>>
+    pub esummarize: Option<Commented<ESummarize>>,
 }
 
 impl Display for EquationDef {
@@ -30,9 +30,8 @@ impl Display for EquationDef {
     }
 }
 
-
 /// CONSTANTS n NAME1 = value1 ... NAMEn = valuen
-#[derive(Debug, Clone, Constructor, Default)]
+#[derive(Debug, Clone, Constructor, Default, Serialize, Deserialize)]
 pub struct Constants {
     pub metadata: Metadata,
     pub definitions: Vec<Commented<EquationDef>>,

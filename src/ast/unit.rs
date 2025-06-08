@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 
 /// UNIT n TYPE m SOME COMMENTS
-#[derive(Debug, Display, Clone, Default)]
+#[derive(Debug, Display, Clone, Default, Serialize, Deserialize)]
 #[display("Unit {number} of type {type_number}")]
 pub struct Unit {
     pub number: u32,
@@ -25,32 +25,13 @@ pub struct Unit {
     pub designates: Option<Vec<Commented<Designate>>>,
 }
 
-
-pub trait InputMode:Clone+Default {
-    type Field: Clone + Debug;
-}
-
-#[derive(Debug, Clone, Default, Display)]
-pub struct WithInitVal;
-#[derive(Debug, Clone, Default, Display)]
-pub struct WithLabel;
-
-impl InputMode for WithInitVal {
-    type Field = Commented<Expr>;
-}
-
-impl InputMode for WithLabel {
-    type Field = Commented<String>;
-}
-
 /// INPUTS n u1,o1 u2,o2 ... un,on v1 v2 ... vn
-#[derive(Debug, Clone, Constructor)]
+#[derive(Debug, Clone, Constructor, Serialize, Deserialize)]
 pub struct UnitInput {
     pub connection: Commented<Expr>,
     /// The initial value for the input
     pub initial: Commented<Expr>,
 }
-
 
 /// A single unit connection (unit, input/output).
 ///
@@ -63,7 +44,7 @@ pub struct UnitConnection {
 
 impl Default for UnitConnection {
     fn default() -> Self {
-        Self::new(0,0)
+        Self::new(0, 0)
     }
 }
 
@@ -73,22 +54,9 @@ impl Display for UnitConnection {
     }
 }
 
-
-
-/// Component summary
-///
-/// Syntax: 
-/// ```txt
-/// SUMMARIZE UnitNo "descriptive text"
-/// ```
-#[derive(Debug, Clone)]
-pub struct Summarize {
-    pub description: String,
-}
-
 /// Constant summary
-/// 
-/// Syntax: 
+///
+/// Syntax:
 /// ```txt
 /// CSUMMARIZE EqnName "description"
 /// ```
@@ -100,8 +68,8 @@ pub struct CSummarize {
 }
 
 /// Equation summary
-/// 
-/// Syntax: 
+///
+/// Syntax:
 /// ```txt
 /// ESUMMARIZE EqnName "description"
 /// ```
@@ -110,29 +78,23 @@ pub struct CSummarize {
 pub struct ESummarize {
     pub eq_name: String,
     pub description: String,
-
 }
 
 /// TRACE ton toff
-#[derive(Debug, Clone, Constructor)]
+#[derive(Debug, Clone, Constructor, Serialize, Deserialize)]
 pub struct Trace {
     pub start_time: f64,
     pub stop_time: f64,
-
 }
-
-
 
 /// FORMAT (format string)
-#[derive(Debug, Clone, Constructor, From)]
+#[derive(Debug, Clone, Constructor, From, Serialize, Deserialize)]
 pub struct Format {
     pub format_string: String,
-
 }
 
-
 /// Metadata from TRNSYS Studio stored in comments
-#[derive(Debug, Clone, Constructor, Default)]
+#[derive(Debug, Clone, Constructor, Default, Serialize, Deserialize)]
 pub struct Metadata {
     pub unit_name: Option<String>,
     pub model: Option<String>,
@@ -141,8 +103,5 @@ pub struct Metadata {
     pub other: HashMap<String, String>,
 }
 
-
-#[derive(Debug, Clone)]
-pub struct End{
-    
-}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct End {}

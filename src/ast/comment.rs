@@ -2,7 +2,6 @@ use derive_more::{AsMut, AsRef, Constructor, Deref, DerefMut, Display};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display, Formatter};
 
-
 #[derive(Clone, Serialize, Deserialize, Default, Display)]
 #[display("Pre: {comment_pre:#?}, \nPost: {comment_post:#?}, Inline: \n{comment_inline:#?}")]
 pub struct Comments {
@@ -14,8 +13,7 @@ pub struct Comments {
 pub trait CommentTrait {}
 
 impl Comments {
-    pub fn with_inline<T>(comment_inline: Option<String>) -> Self
-    {
+    pub fn with_inline<T>(comment_inline: Option<String>) -> Self {
         Self {
             comment_inline,
             comment_pre: None,
@@ -27,20 +25,25 @@ impl Comments {
 impl Debug for Comments {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut ds = f.debug_struct("Comments");
-        
+        let mut has_fields = false;
         if let Some(inline) = &self.comment_inline {
             ds.field("comment_inline", inline);
+            has_fields = true;
         }
         if let Some(pre) = &self.comment_pre {
             ds.field("comment_pre", pre);
+            has_fields = true;
         }
         if let Some(post) = &self.comment_post {
             ds.field("comment_post", post);
+            has_fields = true;
         }
-        
-        
-        
-        ds.finish()
+
+        if has_fields {
+            ds.finish()
+        } else {
+            write!(f, "<Empty>")
+        }
     }
 }
 
@@ -66,8 +69,6 @@ where
     }
 }
 
-
-
 impl<T: Display + std::fmt::Debug> Display for Commented<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(ref pre) = self.comments.comment_pre {
@@ -84,8 +85,7 @@ impl<T: Display + std::fmt::Debug> Display for Commented<T> {
                 write!(f, "\n! {}", line)?;
             }
         }
-        
+
         Ok(())
-        
     }
 }

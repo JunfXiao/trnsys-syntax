@@ -1,4 +1,9 @@
-use super::{BitBool, Block, BlockKind, BlockParser, DocContext, GlobalId, RawHeader, StrUnit, TryFromStr, TypedBlock, parse_block_comment, parse_derivatives, parse_equations, parse_etrace, parse_header, parse_inputs, parse_int, parse_literal_or_identifier, parse_parameters, parse_trace, parse_unit_format, parse_labels};
+use super::{
+    BitBool, Block, BlockKind, BlockParser, DocContext, GlobalId, RawHeader, StrUnit, TryFromStr,
+    TypedBlock, parse_block_comment, parse_derivatives, parse_equations, parse_etrace,
+    parse_header, parse_inputs, parse_int, parse_labels, parse_literal_or_identifier,
+    parse_parameters, parse_trace, parse_unit_format,
+};
 use crate::ast::*;
 use crate::error::{ContentError, Error, RError, ReportWrapper};
 use nom::IResult;
@@ -11,6 +16,7 @@ use nom::multi::{many_m_n, many0, separated_list0};
 use nom::sequence::delimited;
 use std::rc::Rc;
 use strum::IntoEnumIterator;
+use uuid::Uuid;
 
 pub fn parse_commented_block<'a>(
     input: (&'a str, &mut DocContext),
@@ -39,12 +45,14 @@ pub fn parse_block<'a>(input: (&'a str, &mut DocContext)) -> IResult<&'a str, Bl
 }
 
 impl<'a> BlockParser<'a> for Version {
+    fn check_context(context: &DocContext) -> Result<(), RError> {
+        context.ensure_unique_kind(Self::block_kind())
+    }
+
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader<'_>,
-        context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
-        context.ensure_unique(Self::block_kind())?;
         raw_header.ensure_len(1)?;
         let version_str = raw_header.items[0].to_string();
         Ok((input, Version::from(version_str).into()))
@@ -52,12 +60,13 @@ impl<'a> BlockParser<'a> for Version {
 }
 
 impl<'a> BlockParser<'a> for Simulation {
+    fn check_context(context: &DocContext) -> Result<(), RError> {
+        context.ensure_unique_kind(Self::block_kind())
+    }
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
-        context.ensure_unique(Self::block_kind())?;
         raw_header.ensure_len(3)?;
         let transformed = raw_header.transform(parse_literal_or_identifier)?;
         let [t_0, t_f, dt] = transformed.try_into().unwrap();
@@ -99,13 +108,13 @@ impl<'a> BlockParser<'a> for Simulation {
 }
 
 impl<'a> BlockParser<'a> for Tolerances {
+    fn check_context(context: &DocContext) -> Result<(), RError> {
+        context.ensure_unique_kind(Self::block_kind())
+    }
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
-        context.ensure_unique(Self::block_kind())?;
-
         raw_header.ensure_len(2)?;
         let transformed = raw_header.to_vec::<f64>()?;
         let [tol_integration, tol_convergence] = transformed.try_into().unwrap();
@@ -133,13 +142,13 @@ impl<'a> BlockParser<'a> for Tolerances {
 }
 
 impl<'a> BlockParser<'a> for Limits {
+    fn check_context(context: &DocContext) -> Result<(), RError> {
+        context.ensure_unique_kind(Self::block_kind())
+    }
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
-        context.ensure_unique(Self::block_kind())?;
-
         raw_header.ensure_len_between(2, 3)?;
         let mut transformed = raw_header.transform(parse_literal_or_identifier)?;
 
@@ -219,12 +228,13 @@ impl<'a> BlockParser<'a> for Limits {
 }
 
 impl<'a> BlockParser<'a> for NanCheck {
+    fn check_context(context: &DocContext) -> Result<(), RError> {
+        context.ensure_unique_kind(Self::block_kind())
+    }
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
-        context.ensure_unique(Self::block_kind())?;
         raw_header.ensure_len(1)?;
         let [nan_check] = raw_header.to_vec::<BitBool>()?.try_into().unwrap();
 
@@ -234,12 +244,13 @@ impl<'a> BlockParser<'a> for NanCheck {
 }
 
 impl<'a> BlockParser<'a> for OverwriteCheck {
+    fn check_context(context: &DocContext) -> Result<(), RError> {
+        context.ensure_unique_kind(Self::block_kind())
+    }
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
-        context.ensure_unique(Self::block_kind())?;
         raw_header.ensure_len(1)?;
         let [overwrite_check] = raw_header.to_vec::<BitBool>()?.try_into().unwrap();
 
@@ -249,12 +260,13 @@ impl<'a> BlockParser<'a> for OverwriteCheck {
 }
 
 impl<'a> BlockParser<'a> for TimeReport {
+    fn check_context(context: &DocContext) -> Result<(), RError> {
+        context.ensure_unique_kind(Self::block_kind())
+    }
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
-        context.ensure_unique(Self::block_kind())?;
         raw_header.ensure_len(1)?;
         let [time_report] = raw_header.to_vec::<BitBool>()?.try_into().unwrap();
         let block = TimeReport::new(time_report.into());
@@ -263,17 +275,11 @@ impl<'a> BlockParser<'a> for TimeReport {
 }
 
 impl<'a> BlockParser<'a> for Constants {
-    fn try_parse_block<'b>(
-        input: &'a str,
-        raw_header: RawHeader,
-        context: &'b mut DocContext,
-    ) -> Result<(&'a str, Commented<Self>), RError> {
-        raw_header.ensure_len(1)?;
-        let [num_constants] = raw_header.to_vec::<usize>()?.try_into().unwrap();
+    fn register(&self, context: &mut DocContext) -> Result<(), RError> {
+        let mut expr_names = vec![];
 
-        let (input, expressions) = parse_equations(num_constants).parse(input)?;
-
-        for expr in &expressions {
+        // register all the constants in the context
+        for expr in &self.definitions {
             let (identifiers, unit_outputs) = expr.expr.dependencies();
             let dependencies = identifiers
                 .iter()
@@ -284,13 +290,36 @@ impl<'a> BlockParser<'a> for Constants {
                 return Err(RError::new(ContentError::InvalidValue {
                     part: "Constants".to_string(),
                     value: expr.name.to_string(),
-                    reason: "Constants cannot have unit outputs".to_string(),
+                    reason: "Constants cannot have unit outputs' dependencies".to_string(),
                 }));
             }
             // TODO: Ensure it's dependencies are all constants
 
             context.register_dep(GlobalId::Variable(expr.name.clone()), Some(dependencies))?;
+            expr_names.push(expr.name.clone());
         }
+
+        // register the exprs as self's dependencies
+        context.register_dep(
+            GlobalId::Block(Self::block_kind(), Uuid::new_v4().to_string()),
+            Some(
+                expr_names
+                    .into_iter()
+                    .map(|name| GlobalId::Variable(name))
+                    .collect(),
+            ),
+        )?;
+
+        Ok(())
+    }
+    fn try_parse_block<'b>(
+        input: &'a str,
+        raw_header: RawHeader,
+    ) -> Result<(&'a str, Commented<Self>), RError> {
+        raw_header.ensure_len(1)?;
+        let [num_constants] = raw_header.to_vec::<usize>()?.try_into().unwrap();
+
+        let (input, expressions) = parse_equations(num_constants).parse(input)?;
 
         let mut block = Constants::default();
         block.definitions = expressions;
@@ -300,19 +329,9 @@ impl<'a> BlockParser<'a> for Constants {
 }
 
 impl<'a> BlockParser<'a> for Equations {
-    fn try_parse_block<'b>(
-        input: &'a str,
-        raw_header: RawHeader,
-        context: &'b mut DocContext,
-    ) -> Result<(&'a str, Commented<Self>), RError> {
-        raw_header.ensure_len(1)?;
-        let [num_equations] = raw_header.to_vec::<usize>()?.try_into().unwrap();
-        let (input, expressions) = parse_equations(num_equations).parse(input)?;
-
-        let mut block = Equations::default();
-        block.definitions = expressions;
-
-        for expr in block.definitions.iter() {
+    fn register(&self, context: &mut DocContext) -> Result<(), RError> {
+        let mut expr_names = vec![];
+        for expr in self.definitions.iter() {
             // check if the names are unique and announce dependencies at the same time
             let id = GlobalId::Variable(expr.name.to_string());
 
@@ -325,21 +344,58 @@ impl<'a> BlockParser<'a> for Equations {
 
             context.register_dep(id, Some(dependencies))?;
         }
+        // register the exprs as self's dependencies
+        context.register_dep(
+            GlobalId::Block(Self::block_kind(), Uuid::new_v4().to_string()),
+            Some(
+                expr_names
+                    .into_iter()
+                    .map(|name| GlobalId::Variable(name))
+                    .collect(),
+            ),
+        )?;
+        Ok(())
+    }
 
+    fn try_parse_block<'b>(
+        input: &'a str,
+        raw_header: RawHeader,
+    ) -> Result<(&'a str, Commented<Self>), RError> {
+        raw_header.ensure_len(1)?;
+        let [num_equations] = raw_header.to_vec::<usize>()?.try_into().unwrap();
+        let (input, expressions) = parse_equations(num_equations).parse(input)?;
+
+        let mut block = Equations::default();
+        block.definitions = expressions;
         Ok((input, block.into()))
     }
 }
 
 impl<'a> BlockParser<'a> for Accelerate {
+    fn check_context(context: &DocContext) -> Result<(), RError> {
+        context.ensure_unique_kind(Self::block_kind())
+    }
+
+    fn register(&self, context: &mut DocContext) -> Result<(), RError> {
+        let global_ids = self
+            .outputs
+            .iter()
+            .map(|unit_output| GlobalId::Unit(unit_output.unit))
+            .collect::<Vec<_>>();
+
+        context.register_dep(
+            GlobalId::Block(Self::block_kind(), Uuid::new_v4().to_string()),
+            Some(global_ids),
+        )
+    }
+
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
         // ACCELERATE n
         // u1,o1 u2,o2 ... ui,oi .... un,on
 
-        context.ensure_unique(Self::block_kind())?;
         raw_header.ensure_len(1)?;
         let [num_accelerate] = raw_header.to_vec::<usize>()?.try_into().unwrap();
 
@@ -371,28 +427,12 @@ impl<'a> BlockParser<'a> for Accelerate {
             pre_comments.extend(block_comment.into_iter().map(Into::into));
         }
 
-        // register dependencies
-        let global_ids = block
-            .outputs
-            .iter()
-            .map(|unit_output| GlobalId::Unit(unit_output.unit))
-            .collect::<Vec<_>>();
-
-        context.register_dep(
-            GlobalId::Block(Self::block_kind(), context.prev_blocks.len()),
-            Some(global_ids),
-        )?;
-
         Ok((input, block))
     }
 }
 
 impl<'a> BlockParser<'a> for Loop {
-    fn try_parse_block<'b>(
-        input: &'a str,
-        raw_header: RawHeader,
-        context: &'b mut DocContext,
-    ) -> Result<(&'a str, Commented<Self>), RError> {
+    fn check_context(context: &DocContext) -> Result<(), RError> {
         // It must be defined between the Simulation and End Block.
         let mut has_simulation: bool = false;
         let mut has_end: bool = false;
@@ -437,7 +477,37 @@ impl<'a> BlockParser<'a> for Loop {
             })
             .into());
         }
+        Ok(())
+    }
 
+    fn register(&self, context: &mut DocContext) -> Result<(), RError> {
+        let num_units = self.units.len();
+        let prev_loop_unit_count = context.prev_blocks.len();
+        if num_units + prev_loop_unit_count > 250 {
+            return Err(RError::new(ContentError::InvalidValue {
+                part: "LOOP".to_string(),
+                value: (num_units + prev_loop_unit_count).to_string(),
+                reason: "In TrnSys 18, you may have maximal 250 units in total.".to_string(),
+            })
+            .into());
+        }
+
+        // register dependencies
+        let global_ids = self
+            .units
+            .iter()
+            .map(|unit| GlobalId::Unit(*unit as usize))
+            .collect::<Vec<_>>();
+
+        context.register_dep(
+            GlobalId::Block(Self::block_kind(), Uuid::new_v4().to_string()),
+            Some(global_ids),
+        )
+    }
+    fn try_parse_block<'b>(
+        input: &'a str,
+        raw_header: RawHeader,
+    ) -> Result<(&'a str, Commented<Self>), RError> {
         // parse self to get the number of units
         // LOOP n REPEAT y
         raw_header.ensure_len(3)?;
@@ -447,19 +517,10 @@ impl<'a> BlockParser<'a> for Loop {
             return Err(RError::new(ContentError::InvalidValue {
                 part: Self::block_kind().to_string(),
                 value: raw_header.items[1].to_string(),
-                reason: "Expected 'LOOP n REPEAT y' format in LOOP block. However, a different TAG is provided other than 'REPEAT'.".to_string()
+                reason: "Expected 'LOOP n REPEAT y' format in LOOP block. However, a different TAG is provided other than 'REPEAT'.".to_string(),
             }).into());
         }
         let num_repeats = usize::try_from_str(*raw_header.items[2]).map_err(|e| RError::from(e))?;
-
-        if num_units + prev_loop_unit_count > 250 {
-            return Err(RError::new(ContentError::InvalidValue {
-                part: "LOOP".to_string(),
-                value: (num_units + prev_loop_unit_count).to_string(),
-                reason: "In TrnSys 18, you may have maximal 250 units in total.".to_string(),
-            })
-            .into());
-        }
 
         let (input, block_comment) = parse_block_comment.parse(input)?;
 
@@ -476,17 +537,6 @@ impl<'a> BlockParser<'a> for Loop {
             .map(|unit_output| unit_output as usize)
             .collect::<Vec<_>>();
 
-        // register dependencies
-        let global_ids = units
-            .iter()
-            .map(|unit| GlobalId::Unit(*unit as usize))
-            .collect::<Vec<_>>();
-
-        context.register_dep(
-            GlobalId::Block(Self::block_kind(), context.prev_blocks.len()),
-            Some(global_ids),
-        )?;
-
         // append in-between comments
         let mut block = Commented::from(Loop::new(units, num_repeats));
         let pre_comments = block.comments.comment_pre.get_or_insert_default();
@@ -499,14 +549,15 @@ impl<'a> BlockParser<'a> for Loop {
 }
 
 impl<'a> BlockParser<'a> for Dfq {
+    fn check_context(context: &DocContext) -> Result<(), RError> {
+        context.ensure_unique_kind(Self::block_kind())
+    }
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
         // DFQ k
         // k is 1, 2 or 3
-        context.ensure_unique(Self::block_kind())?;
         raw_header.ensure_len(1)?;
         let dfq = raw_header.to_vec::<u8>()?[0];
         let method = DfqMethod::from_repr(dfq).ok_or_else(|| {
@@ -528,10 +579,27 @@ impl<'a> BlockParser<'a> for Dfq {
 }
 
 impl<'a> BlockParser<'a> for NoCheck {
+    fn check_context(context: &DocContext) -> Result<(), RError> {
+        context.ensure_unique_kind(Self::block_kind())
+    }
+
+    fn register(&self, context: &mut DocContext) -> Result<(), RError> {
+        // register dependencies
+        let global_ids = self
+            .inputs
+            .iter()
+            .map(|unit_input| GlobalId::Unit(unit_input.unit))
+            .collect::<Vec<_>>();
+
+        context.register_dep(
+            GlobalId::Block(Self::block_kind(), Uuid::new_v4().to_string()),
+            Some(global_ids),
+        )?;
+        Ok(())
+    }
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
         // similar to accelerate
         // NOCHECK n
@@ -539,7 +607,6 @@ impl<'a> BlockParser<'a> for NoCheck {
         // n is the number of unit inputs
         // TRNSYS allows up to 20 different INPUTS to be removed from the list of INPUTS to be checked
 
-        context.ensure_unique(Self::block_kind())?;
         raw_header.ensure_len(1)?;
         let [num_nocheck] = raw_header.to_vec::<usize>()?.try_into().unwrap();
         let (input, block_comment) = parse_block_comment.parse(input)?;
@@ -569,32 +636,21 @@ impl<'a> BlockParser<'a> for NoCheck {
             pre_comments.extend(block_comment.into_iter().map(Into::into));
         }
 
-        // register dependencies
-        let global_ids = block
-            .inputs
-            .iter()
-            .map(|unit_input| GlobalId::Unit(unit_input.unit))
-            .collect::<Vec<_>>();
-
-        context.register_dep(
-            GlobalId::Block(Self::block_kind(), context.prev_blocks.len()),
-            Some(global_ids),
-        )?;
-
         Ok((input, block))
     }
 }
 
 impl<'a> BlockParser<'a> for EqSolver {
+    fn check_context(context: &DocContext) -> Result<(), RError> {
+        context.ensure_unique_kind(Self::block_kind())
+    }
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
         // EQSOLVER n
         // n: EqSolverMethod
 
-        context.ensure_unique(Self::block_kind())?;
         raw_header.ensure_len(1)?;
         let eq_solver = raw_header.to_vec::<u8>()?[0];
         let method = EqSolverMethod::from_repr(eq_solver).ok_or_else(|| {
@@ -616,15 +672,15 @@ impl<'a> BlockParser<'a> for EqSolver {
 }
 
 impl<'a> BlockParser<'a> for Solver {
+    fn check_context(context: &DocContext) -> Result<(), RError> {
+        context.ensure_unique_kind(Self::block_kind())
+    }
     #[allow(deprecated)]
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
         // SOLVER SolverMethod [optional] RF_min [optional] RF_max
-
-        context.ensure_unique(Self::block_kind())?;
         if raw_header.items.len() < 1 {
             return Err(RError::new(ContentError::InvalidValue {
                 part: "Solver".to_string(),
@@ -696,10 +752,15 @@ impl<'a> BlockParser<'a> for Solver {
 }
 
 impl<'a> BlockParser<'a> for Assign {
+    fn register(&self, context: &mut DocContext) -> Result<(), RError> {
+        context.register_dep(
+            GlobalId::LogicalUnit(self.logical_unit),
+            Some(vec![GlobalId::Variable(self.filename.clone())]),
+        )
+    }
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
         // ASSIGN filename lu
         // lu is the logical unit number
@@ -709,8 +770,6 @@ impl<'a> BlockParser<'a> for Assign {
         let lu: usize = usize::try_from_str(*raw_header.items[1])
             .map_err(|e| ReportWrapper::<Error>::new(e))?;
 
-        context.register_dep(GlobalId::LogicalUnit(lu), None)?;
-
         let block = Assign::new(filename, lu);
 
         Ok((input, block.into()))
@@ -718,10 +777,15 @@ impl<'a> BlockParser<'a> for Assign {
 }
 
 impl<'a> BlockParser<'a> for Designate {
+    fn register(&self, context: &mut DocContext) -> Result<(), RError> {
+        context.register_dep(
+            GlobalId::LogicalUnit(self.logical_unit),
+            Some(vec![GlobalId::Variable(self.filename.clone())]),
+        )
+    }
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
         // DESIGNATE filename lu
         // lu is the logical unit number
@@ -729,7 +793,6 @@ impl<'a> BlockParser<'a> for Designate {
         let filename = raw_header.items[0].to_string();
         let lu: usize = usize::try_from_str(*raw_header.items[1])
             .map_err(|e| ReportWrapper::<Error>::new(e))?;
-        context.register_dep(GlobalId::LogicalUnit(lu), None)?;
         let block = Designate::new(filename, lu);
         Ok((input, block.into()))
     }
@@ -739,7 +802,6 @@ impl<'a> BlockParser<'a> for Include {
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        _context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
         // INCLUDE filename
         raw_header.ensure_len(1)?;
@@ -753,7 +815,6 @@ impl<'a> BlockParser<'a> for Unit {
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader<'a>,
-        _context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
         // UNIT n TYPE m Comment
         // n is the unit number
@@ -821,7 +882,6 @@ impl<'a> BlockParser<'a> for Width {
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        _context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
         // WIDTH n
         // 72 <= n <= 132
@@ -846,7 +906,6 @@ impl<'a> BlockParser<'a> for NoList {
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        _context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
         raw_header.ensure_len(0)?;
 
@@ -858,7 +917,6 @@ impl<'a> BlockParser<'a> for List {
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        _context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
         // LIST
 
@@ -872,7 +930,6 @@ impl<'a> BlockParser<'a> for Map {
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        _context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
         raw_header.ensure_len(0)?;
 
@@ -884,7 +941,6 @@ impl<'a> BlockParser<'a> for End {
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        _context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
         raw_header.ensure_len(0)?;
         let block = End {};
@@ -896,7 +952,6 @@ impl<'a> BlockParser<'a> for CSummarize {
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        _context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
         // CSUMMARIZE EqnName "description"
         raw_header.ensure_len(2)?;
@@ -911,7 +966,6 @@ impl<'a> BlockParser<'a> for ESummarize {
     fn try_parse_block<'b>(
         input: &'a str,
         raw_header: RawHeader,
-        _context: &'b mut DocContext,
     ) -> Result<(&'a str, Commented<Self>), RError> {
         // ESUMMARIZE EqnName "description"
         raw_header.ensure_len(2)?;

@@ -2,8 +2,6 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Data, DeriveInput, parse_macro_input};
 
-
-
 #[proc_macro_derive(BlockEnum)]
 pub fn derive_block_enum(input: TokenStream) -> TokenStream {
     // Extract enum name and variants
@@ -22,9 +20,12 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
             .into();
     };
 
-    let enum_variants = variants.iter().map(|(ident)| {
+    let enum_variants = variants
+        .iter()
+        .map(|(ident)| {
             quote! { #ident ( Commented<#ident> ), }
-    }).collect::<Vec<_>>();
+        })
+        .collect::<Vec<_>>();
 
     // generate the enum definition
     let block_enum_name = format_ident!("Block");
@@ -34,12 +35,13 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
 
             quote! {
                 #kind_enum_name::#ident => {
-                    <#ident as BlockParser>::try_parse_block(
+                    <#ident as BlockParser>::check_context(context)?;
+                    let (rest, block) = <#ident as BlockParser>::try_parse_block(
                         &input,
-                        raw_header,
-                        context
-                    ).map_err(|e|e.attach_printable(format!("When parsing block '{}'", raw_header_kind)))
-                    .map(|(rest, v)| (rest, #block_enum_name::#ident(v)))
+                        raw_header
+                    ).map_err(|e|e.attach_printable(format!("When parsing block '{}'", raw_header_kind)))?;
+                    block.register(context)?;
+                    Ok((rest, #block_enum_name::#ident(block)))
                 }
             }
 
@@ -56,7 +58,7 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
             #block_enum_name::#v(c) => &mut c.comments,
         }
     });
-    
+
     let block_kind_branches = variants.iter().map(|v| {
         let block_kind = format_ident!("{}", v);
         quote! {
@@ -64,11 +66,9 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
         }
     });
 
-
-
     // generate the enum definition
     let enum_def = quote! {
-        #[derive(Debug)]
+        #[derive(Debug, Serialize, Deserialize, Clone)]
         #vis enum #block_enum_name {
             #(
                 #enum_variants
@@ -120,15 +120,13 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
     let typed_block_impls = variants.iter().map(|v| {
         let block_kind = format_ident!("{}", v);
 
-            quote! {
-            impl TypedBlock for #block_kind {
-                fn block_kind() -> BlockKind {
-                    BlockKind::#block_kind
-                }
+        quote! {
+        impl TypedBlock for #block_kind {
+            fn block_kind() -> BlockKind {
+                BlockKind::#block_kind
             }
-            }
-
-
+        }
+        }
     });
 
     let final_output = quote! {

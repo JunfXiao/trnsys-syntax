@@ -3,16 +3,17 @@ pub mod ast;
 pub mod error;
 pub mod parse;
 
+use crate::ast::DocContext;
 use crate::error::{ParseResult, RError};
-use crate::parse::{parse_commented_block};
-use error_stack::{Report};
+use crate::parse::parse_commented_block;
+use error_stack::Report;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use crate::ast::DocContext;
 
 /// High-level representation of a TRNSYS deck file
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrnsysFile {
     /// The parsed Abstract Syntax Tree
     pub ctx: DocContext,
@@ -20,24 +21,20 @@ pub struct TrnsysFile {
     pub path: Option<PathBuf>,
 }
 
-
-
 impl TrnsysFile {
-    
     /// Parse a TRNSYS deck file from a string
     pub fn parse(mut input: &str) -> Result<Self, RError> {
         let mut parse_context = DocContext::new();
 
         while !input.trim().is_empty() {
             let context_ref = &mut parse_context;
-            let (remaining, block) = parse_commented_block((input, context_ref))
-                .map_err(|e| RError::from(e))?;
+            let (remaining, block) =
+                parse_commented_block((input, context_ref)).map_err(|e| RError::from(e))?;
             context_ref.prev_blocks.push(Rc::new(RefCell::new(block)));
             input = remaining;
         }
 
-
-        Ok(Self{
+        Ok(Self {
             ctx: parse_context,
             path: None,
         })
