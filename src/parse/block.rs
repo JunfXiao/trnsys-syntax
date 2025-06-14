@@ -960,6 +960,14 @@ impl<'a> BlockParser<'a> for CSummarize {
         let block = CSummarize::new(eqn_name, description);
         Ok((input, block.into()))
     }
+
+    fn register(&self, context: &mut DocContext) -> Result<(), RError> {
+        // Register the equation name as a variable in the context
+        context.register_dep(
+            GlobalId::Block(Self::block_kind(), self.const_name.clone()),
+            Some(vec![GlobalId::Variable(self.const_name.clone())]),
+        )
+    }
 }
 
 impl<'a> BlockParser<'a> for ESummarize {
@@ -973,5 +981,13 @@ impl<'a> BlockParser<'a> for ESummarize {
         let description = raw_header.items[1].to_string();
         let block = ESummarize::new(eqn_name, description);
         Ok((input, block.into()))
+    }
+
+    fn register(&self, context: &mut DocContext) -> Result<(), RError> {
+        // Register the equation name as a variable in the context
+        context.register_dep(
+            GlobalId::Block(Self::block_kind(), self.eq_name.clone()),
+            Some(vec![GlobalId::Variable(self.eq_name.clone())]),
+        )
     }
 }
