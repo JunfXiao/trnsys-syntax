@@ -1,6 +1,6 @@
 use super::UnitConnection;
 use crate::error::{ContentError, EquationError, ParseResult};
-use error_stack::{Report};
+use error_stack::Report;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -8,8 +8,7 @@ use std::iter;
 use strum_macros::{AsRefStr, Display, EnumString};
 
 /// Represents a mathematical or logical expression
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Expr {
     Literal(f64),
     /// Represents the identifiers of equations, variables
@@ -31,7 +30,7 @@ pub enum Expr {
         second: Box<Expr>,
         third: Box<Expr>,
     },
-    /// Represents the unconnected input. Usually it's `0,0` 
+    /// Represents the unconnected input. Usually it's `0,0`
     Unconnected,
 }
 
@@ -54,18 +53,13 @@ impl Expr {
     }
     /// Check an expression with the given variable bindings
     /// TODO: Migrate to `DocContext` to check.
-    pub fn check(&self, variables: &HashMap<String,Expr>) -> ParseResult<(), ContentError> {
+    pub fn check(&self, variables: &HashMap<String, Expr>) -> ParseResult<(), ContentError> {
         match self {
             Expr::Identifier(name) => variables
                 .get(name)
                 .ok_or(
-                    Report::new(
-                            ContentError::UndefinedVariable {
-                                name: name.clone(),
-                            }
-                        .into(),
-                    )
-                    .attach_printable(self.clone()),
+                    Report::new(ContentError::UndefinedVariable { name: name.clone() }.into())
+                        .attach_printable(self.clone()),
                 )
                 .and_then(|_| Ok(())),
             Expr::BinaryOp {
@@ -76,16 +70,16 @@ impl Expr {
                 if op == &BinaryOperator::Divide {
                     if let Ok(Some(right_value)) = second.evaluate() {
                         if right_value == 0.0 {
-                            return Err(Report::new(EquationError::UnexpectedZero(self.clone()).into()));
+                            return Err(Report::new(
+                                EquationError::UnexpectedZero(self.clone()).into(),
+                            ));
                         }
                     }
                 }
 
                 Ok(())
             }
-            Expr::UnaryOp {  expr, .. } => {
-                expr.check(variables)
-            },
+            Expr::UnaryOp { expr, .. } => expr.check(variables),
 
             Expr::TrinaryOp {
                 op: _op,
@@ -112,7 +106,9 @@ impl Expr {
                 let right_value = second.evaluate()?;
                 if let Some(left_value) = left_value {
                     if let Some(right_value) = right_value {
-                        return Some(op.evaluate((left_value, right_value))).transpose().map_err(|e|e.into());
+                        return Some(op.evaluate((left_value, right_value)))
+                            .transpose()
+                            .map_err(|e| e.into());
                     }
                 }
                 Ok(None)
@@ -120,7 +116,7 @@ impl Expr {
             Expr::UnaryOp { op, expr } => {
                 let value = expr.evaluate()?;
                 if let Some(value) = value {
-                    Some(op.evaluate(value)).transpose().map_err(|e|e.into())
+                    Some(op.evaluate(value)).transpose().map_err(|e| e.into())
                 } else {
                     Ok(None)
                 }
@@ -129,41 +125,34 @@ impl Expr {
             _ => Ok(None),
         }
     }
-    
-    pub fn iter_tree<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Expr> + 'a> {
+
+    pub fn iter_tree<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Expr> + 'a> {
         match self {
-            Expr::BinaryOp { first, second, .. } => {
-                Box::new(
-                    iter::once(self)
-                        .chain(first.iter_tree())
-                        .chain(second.iter_tree())
-                )
-            }
-            Expr::UnaryOp { expr, .. } => {
-                Box::new(
-                    iter::once(self)
-                        .chain(expr.iter_tree())
-                )
-            }
-            Expr::TrinaryOp { first, second, third, .. } => {
-                Box::new(
-                    iter::once(self)
-                        .chain(first.iter_tree())
-                        .chain(second.iter_tree())
-                        .chain(third.iter_tree())
-                )
-            }
-            _ => {
-                Box::new(iter::once(self))
-            }
+            Expr::BinaryOp { first, second, .. } => Box::new(
+                iter::once(self)
+                    .chain(first.iter_tree())
+                    .chain(second.iter_tree()),
+            ),
+            Expr::UnaryOp { expr, .. } => Box::new(iter::once(self).chain(expr.iter_tree())),
+            Expr::TrinaryOp {
+                first,
+                second,
+                third,
+                ..
+            } => Box::new(
+                iter::once(self)
+                    .chain(first.iter_tree())
+                    .chain(second.iter_tree())
+                    .chain(third.iter_tree()),
+            ),
+            _ => Box::new(iter::once(self)),
         }
     }
-    
+
     /// Get all dependency identifiers of the expression
     pub fn dependencies(&self) -> (Vec<&str>, Vec<&UnitConnection>) {
         self.iter_tree()
-            .fold((vec![], vec![]), 
-                  |(mut ids, mut outputs), expr| {
+            .fold((vec![], vec![]), |(mut ids, mut outputs), expr| {
                 match expr {
                     Expr::Identifier(id) => ids.push(id),
                     Expr::UnitOutput(output) => outputs.push(output),
@@ -172,9 +161,6 @@ impl Expr {
                 (ids, outputs)
             })
     }
-    
-    
-    
 }
 
 impl Display for Expr {
@@ -240,72 +226,92 @@ impl Operator<f64> for UnaryOperator {
             UnaryOperator::Abs => Ok(value.abs()),
             UnaryOperator::ACos => {
                 if value < -1.0 || value > 1.0 {
-                    Err(Report::new(ContentError::InvalidValue {
-                        part: "ACos".to_string(),
-                        value: value.to_string(),
-                        reason: "ACos only accepts value in range [-1, 1]".to_string(),
-                    }.into()).attach_printable(self.clone()))
+                    Err(Report::new(
+                        ContentError::InvalidValue {
+                            part: "ACos".to_string(),
+                            value: value.to_string(),
+                            reason: "ACos only accepts value in range [-1, 1]".to_string(),
+                        }
+                        .into(),
+                    )
+                    .attach_printable(self.clone()))
                 } else {
                     Ok(value.acos())
                 }
-            },
+            }
             UnaryOperator::ASin => {
                 if value < -1.0 || value > 1.0 {
-                    Err(Report::new(ContentError::InvalidValue {
-                        part: "Asin".to_string(),
-                        value: value.to_string(),
-                        reason: "Asin only accepts value in range [-1, 1]".to_string(),
-                    }.into()).attach_printable(self.clone()))
+                    Err(Report::new(
+                        ContentError::InvalidValue {
+                            part: "Asin".to_string(),
+                            value: value.to_string(),
+                            reason: "Asin only accepts value in range [-1, 1]".to_string(),
+                        }
+                        .into(),
+                    )
+                    .attach_printable(self.clone()))
                 } else {
                     Ok(value.asin())
                 }
-            },
+            }
             UnaryOperator::ATan => Ok(value.atan()),
             UnaryOperator::Cos => Ok(value.cos()),
             UnaryOperator::Int => {
                 if value.is_nan() {
-                    Err(Report::new(ContentError::InvalidValue {
-                        part: "Int".to_string(),
-                        value: value.to_string(),
-                        reason: "Cannot convert NaN to integer".to_string(),
-                    }.into()).attach_printable(self.clone()))
+                    Err(Report::new(
+                        ContentError::InvalidValue {
+                            part: "Int".to_string(),
+                            value: value.to_string(),
+                            reason: "Cannot convert NaN to integer".to_string(),
+                        }
+                        .into(),
+                    )
+                    .attach_printable(self.clone()))
                 } else {
                     Ok(value.trunc())
                 }
-            },
+            }
             UnaryOperator::Ln => {
                 if value <= 0.0 {
-                    Err(Report::new(ContentError::InvalidValue {
-                        part: "Ln".to_string(),
-                        value: value.to_string(),
-                        reason: "Ln only accepts positive values".to_string(),
-                    }.into()).attach_printable(self.clone()))
+                    Err(Report::new(
+                        ContentError::InvalidValue {
+                            part: "Ln".to_string(),
+                            value: value.to_string(),
+                            reason: "Ln only accepts positive values".to_string(),
+                        }
+                        .into(),
+                    )
+                    .attach_printable(self.clone()))
                 } else {
                     Ok(value.ln())
                 }
-            },
+            }
             UnaryOperator::Log => {
                 if value <= 0.0 {
-                    Err(Report::new(ContentError::InvalidValue {
-                        part: "Log".to_string(),
-                        value: value.to_string(),
-                        reason: "Log only accepts positive values".to_string(),
-                    }.into()).attach_printable(self.clone()))
+                    Err(Report::new(
+                        ContentError::InvalidValue {
+                            part: "Log".to_string(),
+                            value: value.to_string(),
+                            reason: "Log only accepts positive values".to_string(),
+                        }
+                        .into(),
+                    )
+                    .attach_printable(self.clone()))
                 } else {
                     Ok(value.log10())
                 }
-            },
+            }
             UnaryOperator::Sin => Ok(value.sin()),
             UnaryOperator::Tan => Ok(value.tan()),
             UnaryOperator::Exp => Ok(value.exp()),
-
         }
     }
 }
 
-
 /// Binary operators in expressions
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, EnumString, Display, AsRefStr, Copy)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, EnumString, Display, AsRefStr, Copy,
+)]
 pub enum BinaryOperator {
     #[strum(serialize = "+")]
     Add,
@@ -342,6 +348,20 @@ pub enum BinaryOperator {
     Modulo,
 }
 
+impl BinaryOperator {
+    /// Check if the operator is a function-like operator.
+    pub fn is_function_like(&self) -> bool {
+        !matches!(
+            self,
+            BinaryOperator::Add
+                | BinaryOperator::Subtract
+                | BinaryOperator::Multiply
+                | BinaryOperator::Divide
+                | BinaryOperator::Power
+        )
+    }
+}
+
 impl Operator<(f64, f64)> for BinaryOperator {
     fn evaluate(&self, value: (f64, f64)) -> ParseResult<f64, ContentError> {
         let (left, right) = value;
@@ -351,14 +371,15 @@ impl Operator<(f64, f64)> for BinaryOperator {
             BinaryOperator::Multiply => Ok(left * right),
             BinaryOperator::Divide => {
                 if right == 0.0 {
-                    Err(Report::new(EquationError::UnexpectedZero(
-                        Expr::BinaryOp {
+                    Err(Report::new(
+                        EquationError::UnexpectedZero(Expr::BinaryOp {
                             op: BinaryOperator::Modulo,
                             first: Box::new(Expr::Literal(left)),
                             second: Box::new(Expr::Literal(right)),
-                        }
-                    ).into())
-                        .attach_printable(format!("Formula: {} % {}", left, right)))
+                        })
+                        .into(),
+                    )
+                    .attach_printable(format!("Formula: {} % {}", left, right)))
                 } else {
                     Ok(left / right)
                 }
@@ -385,22 +406,22 @@ impl Operator<(f64, f64)> for BinaryOperator {
             BinaryOperator::Max => Ok(left.max(right)),
             BinaryOperator::Modulo => {
                 if right == 0.0 {
-                    Err(Report::new(EquationError::UnexpectedZero(
-                        Expr::BinaryOp {
+                    Err(Report::new(
+                        EquationError::UnexpectedZero(Expr::BinaryOp {
                             op: BinaryOperator::Modulo,
                             first: Box::new(Expr::Literal(left)),
                             second: Box::new(Expr::Literal(right)),
-                        }
-                    ).into())
-                        .attach_printable(format!("Formula: {} % {}", left, right)))
+                        })
+                        .into(),
+                    )
+                    .attach_printable(format!("Formula: {} % {}", left, right)))
                 } else {
                     Ok(left % right)
                 }
-            },
+            }
         }
     }
 }
-
 
 /// Trinary operators in expressions
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumString, Display, AsRefStr)]

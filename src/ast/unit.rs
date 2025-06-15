@@ -1,5 +1,5 @@
 // src/ast/component.rs
-use super::{Assign, Commented, Designate, Expr};
+use super::{Commented, Expr};
 use derive_more::with_trait::Constructor;
 use derive_more::{Display, From};
 use serde::{Deserialize, Serialize};
@@ -21,8 +21,6 @@ pub struct Unit {
     pub etrace: Option<Commented<Trace>>,
     pub format: Option<Commented<Format>>,
     pub metadata: Option<Commented<Metadata>>,
-    pub assigns: Option<Vec<Commented<Assign>>>,
-    pub designates: Option<Vec<Commented<Designate>>>,
 }
 
 /// INPUTS n u1,o1 u2,o2 ... un,on v1 v2 ... vn
@@ -38,7 +36,7 @@ pub struct UnitInput {
 #[derive(Debug, Clone, Hash, Serialize, Deserialize, Constructor, PartialEq, Eq)]
 pub struct UnitConnection {
     pub unit: usize,
-    // the index of the input/output
+    /// the index of the input/output
     pub index: usize,
 }
 
@@ -80,7 +78,7 @@ pub struct ESummarize {
     pub description: String,
 }
 
-/// TRACE ton toff
+/// TRACE t_on t_off
 #[derive(Debug, Clone, Constructor, Serialize, Deserialize)]
 pub struct Trace {
     pub start_time: f64,

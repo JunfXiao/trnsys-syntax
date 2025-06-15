@@ -1,6 +1,5 @@
 use crate::ast::{
-    BinaryOperator, CSummarize, Commented, ESummarize, EquationDef, Expr, TrinaryOperator,
-    UnaryOperator, UnitConnection,
+    BinaryOperator, Commented, EquationDef, Expr, TrinaryOperator, UnaryOperator, UnitConnection,
 };
 use crate::error::{Error, ErrorScope, RError};
 use crate::parse::{
@@ -29,12 +28,16 @@ use nom::{
 
 type ExprResult<'a, T> = IResult<&'a str, T, RError>;
 
-/// float literal
+/// Parses a floating-point number literal from the input string.
+///
+/// Example: `1.23`, `-4.56`, `+7.89`, `-1.2e10`
 pub fn parse_literal(input: &str) -> ExprResult<Expr> {
     map(double, Expr::Literal).parse(input)
 }
 
-/// Unit outputs like `[200,8]`
+/// Parses a unit output connection enclosed in square brackets from the input string.
+///
+/// Example: `[200,8]`
 pub fn parse_unit_output_bracketed(input: &str) -> ExprResult<Expr> {
     let (rest, (unit, output)) = delimited(
         preceded(space0, char('[')),
@@ -56,7 +59,9 @@ pub fn parse_unit_output_bracketed(input: &str) -> ExprResult<Expr> {
     ))
 }
 
-/// Unit outputs like `200,8` without brackets
+/// Parses a unit output connection without brackets from the input string.
+///
+/// Example: `200,8`
 pub fn parse_unit_output(input: &str) -> ExprResult<Expr> {
     let (rest, (unit, output)) = separated_pair(
         preceded(space0, nom::character::complete::u64),
@@ -74,13 +79,16 @@ pub fn parse_unit_output(input: &str) -> ExprResult<Expr> {
     ))
 }
 
+/// Parses an unconnected unit output (`0,0`) from the input string.
 pub fn parse_unconnected(input: &str) -> ExprResult<Expr> {
     map(tag("0,0"), |_| Expr::Unconnected).parse(input)
 }
 
-/// Identifiers are strings that:
-/// - start with a letter or `_`
-/// - followed by any number of letters, digits, or `_`
+/// Parses an identifier from the input string.
+/// Identifiers must start with an alphabetic character or an underscore (`_`),
+/// and can be followed by any number of alphanumeric characters or underscores.
+///
+/// Example: `my_variable`, `_anotherIdentifier`, `Var1`
 pub fn parse_identifier(input: &str) -> ExprResult<Expr> {
     fn first(c: char) -> bool {
         c.is_ascii_alphabetic()
@@ -96,7 +104,9 @@ pub fn parse_identifier(input: &str) -> ExprResult<Expr> {
     .parse(input)
 }
 
-/// Expression within parentheses
+/// Parses an expression enclosed in parentheses from the input string.
+///
+/// Example: `(1 + 2)`
 pub fn parse_parens(input: &str) -> ExprResult<Expr> {
     delimited(
         preceded(space0, char('(')),
@@ -106,12 +116,15 @@ pub fn parse_parens(input: &str) -> ExprResult<Expr> {
     .parse(input)
 }
 
-/// Primary is ont of the followings:
-/// -  literal
-/// - [u,o]
-/// - 0,0
-/// - identifier
-/// - (expr)
+/// Parses a primary expression from the input string.
+/// A primary expression can be one of the following:
+/// - A literal (e.g., `1.23`)
+/// - A unit output in brackets (e.g., `[200,8]`)
+/// - An unconnected unit output (e.g., `0,0`)
+/// - An identifier (e.g., `my_variable`)
+/// - An expression in parentheses (e.g., `(1 + 2)`)
+/// - A trinary function call (e.g., `AE(a,b,c)`)
+/// - A binary function call (e.g., `MAX(a,b)`)
 fn parse_primary(input: &str) -> ExprResult<Expr> {
     preceded(
         space0,
@@ -127,6 +140,8 @@ fn parse_primary(input: &str) -> ExprResult<Expr> {
     )
     .parse(input)
 }
+// Macro to parse a keyword followed by an opening parenthesis,
+// indicating a function call.
 macro_rules! keyword {
     ($op:expr) => {
         map(
@@ -142,6 +157,10 @@ macro_rules! keyword {
     };
 }
 
+/// Parses a unary operation from the input string.
+/// This includes negation (`-`) and functions like `ABS()`, `SIN()`, etc.
+///
+/// Example: `-5`, `ABS(-10)`, `SIN(0.5)`
 fn parse_unary(input: &str) -> ExprResult<Expr> {
     let mut parse_opt_op = opt(preceded(
         space0,
@@ -192,8 +211,9 @@ struct BinInfo {
     right_assoc: bool,
 }
 
-/// Try to retrieve the binary operator and its precedence given the input
-fn bin_op(input: &str) -> ExprResult<BinInfo> {
+/// Parses a binary operator and returns its information (operator, precedence, associativity).
+/// Supported operators: `^`, `*`, `/`, `+`, `-`.
+fn parse_binary_operator(input: &str) -> ExprResult<BinInfo> {
     preceded(
         space0,
         alt((
@@ -227,12 +247,16 @@ fn bin_op(input: &str) -> ExprResult<BinInfo> {
     .parse(input)
 }
 
-/// precedence-climbing
-fn expr_bp(input: &str, min_prec: u8) -> ExprResult<Expr> {
+/// Parses an expression using the precedence-climbing algorithm (also known as Pratt parsing).
+/// This function handles binary operators like `+`, `-`, `*`, `/`, and `^`,
+/// respecting their precedence and associativity. It also handles implicit multiplication.
+///
+/// `min_prec` is the minimum precedence level for an operator to be considered.
+fn _parse_expr(input: &str, min_prec: u8) -> ExprResult<Expr> {
     let (mut rest, mut lhs) = parse_unary(input)?;
 
     loop {
-        if let Ok((after_op, op_info)) = bin_op(rest) {
+        if let Ok((after_op, op_info)) = parse_binary_operator(rest) {
             if op_info.prec < min_prec {
                 break;
             }
@@ -241,7 +265,7 @@ fn expr_bp(input: &str, min_prec: u8) -> ExprResult<Expr> {
             } else {
                 op_info.prec + 1
             };
-            let (after_rhs, rhs) = expr_bp(after_op, next_min)?;
+            let (after_rhs, rhs) = _parse_expr(after_op, next_min)?;
             lhs = Expr::BinaryOp {
                 op: op_info.op,
                 first: Box::new(lhs),
@@ -269,9 +293,11 @@ fn expr_bp(input: &str, min_prec: u8) -> ExprResult<Expr> {
     Ok((rest, lhs))
 }
 
-/// Trinary
+/// Parses a trinary function call from the input string.
+/// Trinary functions take three arguments.
 ///
-/// Format: TAG( first <sp> OP <sp> second <sp> third)
+/// Format: `FUNCTION_NAME(arg1, arg2, arg3)`
+/// Example: `AE(var1, var2, var3)`
 pub fn parse_trinary_call(input: &str) -> ExprResult<Expr> {
     let parse_op = map_report(
         preceded(
@@ -296,10 +322,7 @@ pub fn parse_trinary_call(input: &str) -> ExprResult<Expr> {
         parse_op,
         delimited(
             preceded(space0, char('(')),
-            separated_list1(
-                delimited(space0, char(','), space0),
-                parse_expr, // 递归解析子表达式
-            ),
+            separated_list1(delimited(space0, char(','), space0), parse_expr),
             preceded(space0, char(')')),
         ),
     )
@@ -328,9 +351,11 @@ pub fn parse_trinary_call(input: &str) -> ExprResult<Expr> {
     ))
 }
 
-/// Function calls
+/// Parses a binary function call from the input string.
+/// Binary functions take two arguments.
 ///
-/// Format: TAG( first <sp> second)
+/// Format: `FUNCTION_NAME(arg1, arg2)`
+/// Example: `MAX(val1, val2)`, `AND(cond1, cond2)`
 pub fn parse_binary_call(input: &str) -> ExprResult<Expr> {
     let (rest, op) = preceded(
         space0,
@@ -381,16 +406,19 @@ pub fn parse_binary_call(input: &str) -> ExprResult<Expr> {
     ))
 }
 
-/// Promote all errors to failures
+/// Promotes all `nom::Err::Error` to `nom::Err::Failure` for the given parser.
+/// This is useful to prevent backtracking in certain parsing scenarios.
 fn promote<'a>(
     mut parser: impl Parser<&'a str, Output = Expr, Error = RError>,
 ) -> impl Parser<&'a str, Output = Expr, Error = RError> {
     move |input| parser.parse(input).map_err(|e| e.into())
 }
 
-/// Parse an expression and return the remaining input
+/// Parses an expression from the input string using the precedence-climbing algorithm (`expr_bp`).
+/// This is a wrapper around `expr_bp` that starts with a minimum precedence of 1 and
+/// provides more detailed error reporting.
 pub fn parse_expr(input: &str) -> IResult<&str, Expr, RError> {
-    map_report(promote(|i| expr_bp(i, 1)), |e| {
+    map_report(promote(|i| _parse_expr(i, 1)), |e| {
         e.change_context(Error::UnexpectedContent {
             message: format!("Cannot parse Expression: {}", input),
             scope: ErrorScope::Expression,
@@ -399,7 +427,9 @@ pub fn parse_expr(input: &str) -> IResult<&str, Expr, RError> {
     .parse(input)
 }
 
-/// Consumes the entire input and returns the parsed expression
+/// Consumes the entire input string and parses it as a single expression.
+/// This function ensures that no input is left unparsed after the expression.
+/// It also provides error reporting if the entire input cannot be consumed.
 pub fn consume_expr(input: &str) -> ExprResult<Expr> {
     map_report(promote(all_consuming(preceded(space0, parse_expr))), |r| {
         r.attach_printable("Failed to consume entire expression.")
@@ -407,7 +437,9 @@ pub fn consume_expr(input: &str) -> ExprResult<Expr> {
     .parse(input)
 }
 
-//
+/// Parses the start of an equation, specifically the identifier before the equals sign.
+///
+/// Example: `my_equation = ...` (would parse `my_equation`)
 fn equation_start(input: &str) -> IResult<&str, Expr, RError> {
     let (input, id) = context(
         "Equation Start",
@@ -424,6 +456,8 @@ fn equation_start(input: &str) -> IResult<&str, Expr, RError> {
     }
 }
 
+/// Parses a complete equation block, including any preceding comments,
+/// the equation itself (name = expression), and optional CSummarize/ESummarize blocks.
 fn parse_eq_block(input: &str) -> IResult<&str, Commented<EquationDef>, RError> {
     let (input, (comments_pre, eq_name, (content, comment_inline))) =
         (parse_block_comment, equation_start, parse_commented_row).parse(input)?;
@@ -433,18 +467,6 @@ fn parse_eq_block(input: &str) -> IResult<&str, Commented<EquationDef>, RError> 
         parse_header_of_kind(Some(BlockKind::ESummarize), Some(2)),
     )
     .parse(input)?;
-
-    let c_summarize: Option<Commented<CSummarize>> = if let Some(header) = cs_header {
-        Some(CSummarize::try_parse_block_by_header(header)?)
-    } else {
-        None
-    };
-
-    let e_summarize: Option<Commented<ESummarize>> = if let Some(header) = es_header {
-        Some(ESummarize::try_parse_block_by_header(header)?)
-    } else {
-        None
-    };
 
     let eq_name = if let Expr::Identifier(name) = eq_name {
         name
@@ -460,8 +482,6 @@ fn parse_eq_block(input: &str) -> IResult<&str, Commented<EquationDef>, RError> 
     let equation = EquationDef {
         name: eq_name,
         expr,
-        csummarize: c_summarize,
-        esummarize: e_summarize,
     };
 
     let mut result = Commented::from(equation);
@@ -474,13 +494,19 @@ fn parse_eq_block(input: &str) -> IResult<&str, Commented<EquationDef>, RError> 
     Ok((input, result))
 }
 
-/// Parse an equation in the form of `name = expr`
+/// Creates a parser that parses a specific number of equations.
+///
+/// `num`: The exact number of equations to parse.
 pub fn parse_equations<'a>(
     num: usize,
 ) -> impl Parser<&'a str, Output = Vec<Commented<EquationDef>>, Error = RError> {
     many_m_n(num, num, parse_eq_block)
 }
 
+/// Parses either a literal or an identifier from the input string, consuming the entire input.
+/// This is useful for parsing simple values that can be either a number or a variable name.
+///
+/// Example: `123`, `my_var`
 pub fn parse_literal_or_identifier(input: &str) -> Result<Expr, RError> {
     let (_, result) = map_report(
         promote(all_consuming(delimited(

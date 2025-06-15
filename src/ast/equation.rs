@@ -1,4 +1,4 @@
-use crate::ast::{CSummarize, Commented, ESummarize, Expr, Metadata};
+use crate::ast::{Commented, Expr, Metadata};
 use derive_more::Constructor;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
@@ -13,19 +13,11 @@ pub struct Equations {
 pub struct EquationDef {
     pub name: String,
     pub expr: Expr,
-    pub csummarize: Option<Commented<CSummarize>>,
-    pub esummarize: Option<Commented<ESummarize>>,
 }
 
 impl Display for EquationDef {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "Eq: {} = {}", self.name, self.expr)?;
-        if let Some(ref csummarize) = self.csummarize {
-            write!(f, "Constant Summary: {}", csummarize)?;
-        }
-        if let Some(ref esummarize) = self.esummarize {
-            write!(f, "Equation Summary: {}", esummarize)?;
-        }
         Ok(())
     }
 }

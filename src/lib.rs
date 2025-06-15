@@ -2,6 +2,7 @@ use std::cell::RefCell;
 pub mod ast;
 pub mod error;
 pub mod parse;
+pub mod serialize;
 
 use crate::ast::DocContext;
 use crate::error::{ParseResult, RError};

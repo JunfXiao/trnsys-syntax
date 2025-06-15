@@ -1,11 +1,11 @@
+use crate::error::{Error as ErrorBase, Error, ErrorScope};
 use core::fmt;
-use crate::error::{ErrorScope, Error as ErrorBase};
+use derive_more::{AsMut, AsRef, Deref, DerefMut, From, Into};
 use error_stack::{Context, Report};
+use nom::Err as NomErr;
 use nom::error::{ContextError, ErrorKind, FromExternalError, ParseError};
 use std::error::Error as StdError;
 use std::fmt::Debug;
-use nom::Err as NomErr;
-use derive_more::{AsMut, AsRef, Deref, DerefMut, From, Into};
 
 #[derive(From, Into, AsMut, AsRef, Deref, DerefMut)]
 #[repr(transparent)]
@@ -13,14 +13,14 @@ pub struct ReportWrapper<T>(pub Report<T>)
 where
     T: Context + StdError + Sized;
 
-
 impl<T> ReportWrapper<T>
 where
     T: Context + StdError + Sized,
 {
     #[track_caller]
-    pub fn new<R>(err: R) -> Self 
-    where R: Into<T>
+    pub fn new<R>(err: R) -> Self
+    where
+        R: Into<T>,
     {
         Self(error_stack::Report::new(err.into()))
     }
@@ -43,7 +43,6 @@ where
         self
     }
 
-
     #[track_caller]
     pub fn change_context<C>(self, context: C) -> ReportWrapper<C>
     where
@@ -51,13 +50,7 @@ where
     {
         ReportWrapper(self.0.change_context(context))
     }
-    
-    
 }
-
-
-
-
 
 pub trait NewFromErrorKind<T> {
     #[track_caller]
@@ -69,7 +62,6 @@ where
     T: NewFromErrorKind<I> + Context + StdError + Sized,
 {
     fn add_context(_input: I, _ctx: &'static str, other: Self) -> Self {
-        
         other.attach_printable(_ctx)
     }
 }
@@ -80,12 +72,19 @@ where
 {
     #[track_caller]
     fn from_error_kind(input: I, kind: ErrorKind) -> Self {
-        ReportWrapper(Report::new(T::new_from_error_kind(input, kind, ErrorScope::Document)))
+        ReportWrapper(Report::new(T::new_from_error_kind(
+            input,
+            kind,
+            ErrorScope::Document,
+        )))
     }
 
     #[track_caller]
     fn append(input: I, kind: ErrorKind, other: Self) -> Self {
-        let report = other.0.change_context(T::new_from_error_kind(input, kind, ErrorScope::Document));
+        let report =
+            other
+                .0
+                .change_context(T::new_from_error_kind(input, kind, ErrorScope::Document));
         ReportWrapper(report)
     }
 }
@@ -146,8 +145,9 @@ impl From<strum::ParseError> for ReportWrapper<ErrorBase> {
     }
 }
 
-impl<R> From<ReportWrapper<R>> for NomErr<ReportWrapper<R>,ReportWrapper<R>>
-where R: StdError + Context + Send + Sync
+impl<R> From<ReportWrapper<R>> for NomErr<ReportWrapper<R>, ReportWrapper<R>>
+where
+    R: StdError + Context + Send + Sync,
 {
     #[track_caller]
     fn from(value: ReportWrapper<R>) -> Self {
@@ -155,46 +155,64 @@ where R: StdError + Context + Send + Sync
     }
 }
 
-impl<RW> From<NomErr<RW,RW>> for ReportWrapper<RW>
-where RW: StdError + Context + Send + Sync + Default,
+impl<RW> From<NomErr<RW, RW>> for ReportWrapper<RW>
+where
+    RW: StdError + Context + Send + Sync + Default,
 {
     #[track_caller]
-    fn from(value: NomErr<RW,RW>) -> Self {
+    fn from(value: NomErr<RW, RW>) -> Self {
         match value {
             NomErr::Error(e) => e.into(),
             NomErr::Failure(e) => e.into(),
-            NomErr::Incomplete(needed) => ReportWrapper::new(
-                RW::default(),
-            ).attach_printable(
-                format!("Incomplete input. Need {:?} more chars", needed)
-            ),
+            NomErr::Incomplete(needed) => ReportWrapper::new(RW::default())
+                .attach_printable(format!("Incomplete input. Need {:?} more chars", needed)),
         }
     }
 }
 
-impl<T,K> NewFromErrorKind<K> for ReportWrapper<T> 
-where T: NewFromErrorKind<K> + StdError + Sync + Send + 'static,
+impl<T, K> NewFromErrorKind<K> for ReportWrapper<T>
+where
+    T: NewFromErrorKind<K> + StdError + Sync + Send + 'static,
 {
     #[track_caller]
     fn new_from_error_kind(input: K, kind: ErrorKind, error_scope: ErrorScope) -> Self {
-        ReportWrapper(Report::new(T::new_from_error_kind(input, kind, error_scope)))
+        ReportWrapper(Report::new(T::new_from_error_kind(
+            input,
+            kind,
+            error_scope,
+        )))
     }
 }
 
-
 impl<T> From<NomErr<ReportWrapper<T>>> for ReportWrapper<T>
-where T: StdError + Send + Sync + 'static + NewFromErrorKind<String>,
+where
+    T: StdError + Send + Sync + 'static + NewFromErrorKind<String>,
 {
     #[track_caller]
     fn from(value: NomErr<ReportWrapper<T>>) -> Self {
         match value {
             NomErr::Error(e) => e,
             NomErr::Failure(e) => e,
-            NomErr::Incomplete(needed) => ReportWrapper(T::new_from_error_kind(
-                format!("Incomplete input. Need {:?} more chars", needed),
-                ErrorKind::Eof,
-                ErrorScope::Document,
-            ).into()),
+            NomErr::Incomplete(needed) => ReportWrapper(
+                T::new_from_error_kind(
+                    format!("Incomplete input. Need {:?} more chars", needed),
+                    ErrorKind::Eof,
+                    ErrorScope::Document,
+                )
+                .into(),
+            ),
         }
+    }
+}
+
+impl From<std::fmt::Error> for ReportWrapper<Error> {
+    fn from(value: std::fmt::Error) -> Self {
+        Self::new(value)
+    }
+}
+
+impl From<std::io::Error> for ReportWrapper<Error> {
+    fn from(value: std::io::Error) -> Self {
+        Self::new(value)
     }
 }

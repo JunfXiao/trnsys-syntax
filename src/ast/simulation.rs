@@ -27,7 +27,8 @@ pub struct Tolerances {
     pub convergence_tolerance: f64,
 }
 
-/// LIMITS m n p
+/// Format: `LIMITS m n p`
+/// p is optional and can be used to set a trace limit.
 #[derive(Debug, Clone, Constructor, Serialize, Deserialize)]
 pub struct Limits {
     pub max_iterations: Expr,

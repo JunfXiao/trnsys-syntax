@@ -1,5 +1,6 @@
 use crate::ast::Version;
 use crate::error::{ContentError, Error, ErrorScope, RError, ReportWrapper};
+use crate::serialize::DeckWrite;
 use nom::{AsChar, FindToken, Input, Mode, OutputMode, PResult, Parser};
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -55,63 +56,51 @@ use uuid::Uuid;
     Serialize,
     Deserialize,
 )] // BlockEnum
-#[display("{_variant}")]
+#[display("{}", self.as_ref())]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum BlockKind {
+    // default unknown
+    #[skip_block]
+    Unknown,
     // Simulation control statements
-    #[strum(serialize = "VERSION")]
     Version,
-    #[strum(serialize = "SIMULATION")]
     Simulation,
-    #[strum(serialize = "TOLERANCES")]
     Tolerances,
-    #[strum(serialize = "LIMITS")]
     Limits,
-    #[strum(serialize = "NAN_CHECK")]
     NanCheck,
-    #[strum(serialize = "OVERWRITE_CHECK")]
     OverwriteCheck,
-    #[strum(serialize = "TIME_REPORT")]
     TimeReport,
-    #[strum(serialize = "CONSTANTS")]
     Constants,
     #[strum(serialize = "EQUATIONS", serialize = "EQU")]
     Equations,
-    #[strum(serialize = "ACCELERATE")]
     Accelerate,
-    #[strum(serialize = "LOOP")]
     Loop,
-    #[strum(serialize = "DFQ")]
     Dfq,
-    #[strum(serialize = "NOCHECK")]
     NoCheck,
     #[strum(serialize = "EQSOLVER")]
     EqSolver,
-    #[strum(serialize = "SOLVER")]
     Solver,
-    #[strum(serialize = "ASSIGN")]
     Assign,
-    #[strum(serialize = "DESIGNATE")]
     Designate,
-    #[strum(serialize = "INCLUDE")]
     Include,
-    #[strum(serialize = "END")]
     End,
-    // Component definitions
-    #[strum(serialize = "UNIT")]
     Unit,
-    // Listing control statements
-    #[strum(serialize = "WIDTH")]
     Width,
     #[strum(serialize = "NOLIST")]
     NoList,
-    #[strum(serialize = "LIST")]
     List,
-    #[strum(serialize = "MAP")]
     Map,
     #[strum(serialize = "CSUMMARIZE")]
     CSummarize,
     #[strum(serialize = "ESUMMARIZE")]
     ESummarize,
+    #[skip_block]
+    Trace,
+    #[strum(serialize = "ETRACE")]
+    #[skip_block]
+    ETrace,
+    #[skip_block]
+    Format,
 }
 
 pub trait TypedBlock {

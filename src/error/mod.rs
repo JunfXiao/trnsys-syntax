@@ -11,6 +11,7 @@ pub use std::error::Error as StdError;
 pub use std::io::Error as IoError;
 use strum_macros::Display;
 
+use bincode::error::DecodeError;
 // src/error.rs
 use nom::error::ErrorKind;
 use std::borrow::Cow;
@@ -54,6 +55,15 @@ pub enum Error {
     ConversionError { input: String, target: String },
 
     #[error(transparent)]
+    BinaryDecodeError {
+        #[from]
+        source: DecodeError,
+    },
+
+    #[error(transparent)]
+    FormatError(#[from] std::fmt::Error),
+
+    #[error(transparent)]
     ContentError(#[from] ContentError),
 
     #[error("Invalid {scope}: '{kind:?}' Failed in \"{}\"", self.text_short())]
@@ -63,7 +73,7 @@ pub enum Error {
         scope: ErrorScope,
     },
 
-    #[error("IO Error: {0}")]
+    #[error(transparent)]
     Io(#[from] std::io::Error),
 }
 

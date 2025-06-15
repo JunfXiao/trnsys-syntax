@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Data, DeriveInput, parse_macro_input};
 
-#[proc_macro_derive(BlockEnum)]
+#[proc_macro_derive(BlockEnum, attributes(skip_block))]
 pub fn derive_block_enum(input: TokenStream) -> TokenStream {
     // Extract enum name and variants
     let ast = parse_macro_input!(input as DeriveInput);
@@ -12,6 +12,11 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
     let variants = if let Data::Enum(data) = ast.data {
         data.variants
             .into_iter()
+            .filter(|v| {
+                !v.attrs
+                    .iter()
+                    .any(|attr| attr.path().is_ident("skip_block"))
+            })
             .map(|v| v.ident)
             .collect::<Vec<_>>()
     } else {
@@ -45,6 +50,13 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
                 }
             }
 
+    });
+
+    let write_to_branches = variants.iter().map(|v| {
+        let block_kind = format_ident!("{}", v);
+        quote! {
+            #block_enum_name::#block_kind(c) => c.write_to(writer, BlockKind::#block_kind),
+        }
     });
 
     let comment_branches = variants.iter().map(|v| {
@@ -90,6 +102,7 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
                 }
                 }
             }
+
             pub fn comments(&self) -> &Comments {
                 match self {
                     #(
@@ -113,6 +126,23 @@ pub fn derive_block_enum(input: TokenStream) -> TokenStream {
                     )*
                 }
             }
+        }
+
+        impl DeckWrite for #block_enum_name {
+
+            fn write_to<W: std::fmt::Write>(&self, writer: &mut W, kind:BlockKind) -> Result<(), RError> {
+                match self {
+                    #(
+                        #write_to_branches
+                    )*
+                    _ => Err(Error::UnknownKeyword {
+                        keyword: format!("{:?}", self),
+                        scope: ErrorScope::Document
+                    }.into())
+                }
+            }
+
+
         }
     };
 
