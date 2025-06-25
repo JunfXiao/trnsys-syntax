@@ -1,4 +1,4 @@
-use super::UnitConnection;
+use super::{GlobalId, UnitConnection};
 use crate::error::{ContentError, EquationError, ParseResult};
 use error_stack::Report;
 use serde::{Deserialize, Serialize};
@@ -150,16 +150,15 @@ impl Expr {
     }
 
     /// Get all dependency identifiers of the expression
-    pub fn dependencies(&self) -> (Vec<&str>, Vec<&UnitConnection>) {
-        self.iter_tree()
-            .fold((vec![], vec![]), |(mut ids, mut outputs), expr| {
-                match expr {
-                    Expr::Identifier(id) => ids.push(id),
-                    Expr::UnitOutput(output) => outputs.push(output),
-                    _ => {}
-                }
-                (ids, outputs)
-            })
+    pub fn dependencies(&self) -> Vec<GlobalId> {
+        self.iter_tree().fold(vec![], |(mut ids), expr| {
+            match expr {
+                Expr::Identifier(id) => ids.push(GlobalId::Variable(id.clone())),
+                Expr::UnitOutput(output) => ids.push(GlobalId::Unit(output.unit)),
+                _ => {}
+            }
+            ids
+        })
     }
 }
 

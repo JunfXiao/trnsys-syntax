@@ -280,13 +280,12 @@ impl<'a> BlockParser<'a> for Constants {
 
         // register all the constants in the context
         for expr in &self.definitions {
-            let (identifiers, unit_outputs) = expr.expr.dependencies();
-            let dependencies = identifiers
-                .iter()
-                .map(|id| GlobalId::Variable(id.to_string()))
-                .collect::<Vec<_>>();
+            let dependencies = expr.expr.dependencies();
 
-            if !unit_outputs.is_empty() {
+            if dependencies
+                .iter()
+                .any(|id| matches!(id, GlobalId::Unit(_)))
+            {
                 return Err(RError::new(ContentError::InvalidValue {
                     part: "Constants".to_string(),
                     value: expr.name.to_string(),
@@ -335,14 +334,7 @@ impl<'a> BlockParser<'a> for Equations {
             // check if the names are unique and announce dependencies at the same time
             let id = GlobalId::Variable(expr.name.to_string());
 
-            let (identifiers, unit_outputs) = expr.expr.dependencies();
-            let mut dependencies = identifiers
-                .iter()
-                .map(|id| GlobalId::Variable(id.to_string()))
-                .collect::<Vec<_>>();
-            dependencies.extend(unit_outputs.iter().map(|id| GlobalId::Unit(id.unit)));
-
-            context.register_dep(id, Some(dependencies))?;
+            context.register_dep(id, Some(expr.expr.dependencies()))?;
         }
         // register the exprs as self's dependencies
         context.register_dep(
@@ -753,10 +745,7 @@ impl<'a> BlockParser<'a> for Solver {
 
 impl<'a> BlockParser<'a> for Assign {
     fn register(&self, context: &mut DocContext) -> Result<(), RError> {
-        context.register_dep(
-            GlobalId::LogicalUnit(self.logical_unit),
-            Some(vec![GlobalId::Variable(self.filename.clone())]),
-        )
+        context.register_dep(GlobalId::LogicalUnit(self.logical_unit), None)
     }
     fn try_parse_block<'b>(
         input: &'a str,
@@ -778,10 +767,7 @@ impl<'a> BlockParser<'a> for Assign {
 
 impl<'a> BlockParser<'a> for Designate {
     fn register(&self, context: &mut DocContext) -> Result<(), RError> {
-        context.register_dep(
-            GlobalId::LogicalUnit(self.logical_unit),
-            Some(vec![GlobalId::Variable(self.filename.clone())]),
-        )
+        context.register_dep(GlobalId::LogicalUnit(self.logical_unit), None)
     }
     fn try_parse_block<'b>(
         input: &'a str,
@@ -875,6 +861,36 @@ impl<'a> BlockParser<'a> for Unit {
             comments_post.map(|v| v.into_iter().map(Into::into).collect());
 
         Ok((input, block))
+    }
+
+    fn register(&self, context: &mut DocContext) -> Result<(), RError> {
+        let mut dependencies = vec![];
+
+        if let Some(ref inputs) = self.inputs {
+            for input in inputs {
+                // add all input.value.dependencies
+                dependencies.extend(input.connection.dependencies());
+                dependencies.extend(input.initial.dependencies());
+            }
+        }
+
+        if let Some(ref parameters) = self.parameters {
+            for parameter in parameters {
+                // add all parameter.value.dependencies
+                dependencies.extend(parameter.value.dependencies());
+            }
+        }
+
+        if let Some(ref derivatives) = self.derivatives {
+            for derivative in derivatives {
+                // add all derivative.value.dependencies
+                dependencies.extend(derivative.value.dependencies());
+            }
+        }
+
+        context.register_dep(GlobalId::Unit(self.number as usize), Some(dependencies))?;
+
+        Ok(())
     }
 }
 
