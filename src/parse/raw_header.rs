@@ -1,8 +1,8 @@
 use super::{map_report, parse_block_comment, parse_inline_values_strict};
-use crate::ast::Comments;
+use crate::ast::{Commented, Comments};
 use crate::error::{ContentError, Error, RError, StdError};
 use crate::parse::{
-    parse_any_block_kind, parse_commented_row, parse_inline_values, BlockKind, StrRef, TryFromStr,
+    BlockKind, StrRef, TryFromStr, parse_any_block_kind, parse_commented_row, parse_inline_values,
 };
 use derive_more::Display;
 use error_stack::{Context, Report};
@@ -13,12 +13,11 @@ use std::borrow::Cow;
 use std::fmt::{Debug, Display};
 
 #[derive(Debug, Clone, Display)]
-#[display("RawHeader({block_kind:?})[{items:?}]\n{{\n{comments}\n}}")]
+#[display("RawHeader({block_kind:?})[{items:?}]")]
 /// A simple one-line block
 pub struct RawHeader<'a, K = BlockKind> {
     pub block_kind: K,
     pub items: Vec<StrRef<'a>>,
-    pub comments: Comments,
 }
 
 impl<'a, K> RawHeader<'a, K>
@@ -101,7 +100,7 @@ where
     }
 
     /// Transform the items in the header using a function `f`.
-    pub fn transform<F,T>(&self, f:F) -> Result<Vec<T>, RError>
+    pub fn transform<F, T>(&self, f: F) -> Result<Vec<T>, RError>
     where
         F: Fn(&str) -> Result<T, RError>,
     {
@@ -124,36 +123,37 @@ where
 
 /// Parse a simple one-line header WITHOUT its Keyword.
 ///
-pub fn parse_header(input: &str) -> IResult<&str, RawHeader, RError> {
+pub fn parse_header(input: &str) -> IResult<&str, Commented<RawHeader>, RError> {
     map_report(
         parse_header_of_kind(Some(parse_any_block_kind), None),
-        |e| e.attach_printable("Invalid block header.")
+        |e| e.attach_printable("Invalid block header."),
     )
     .parse(input)
 }
 
 /// Parse a simple one-line header with its Keyword.
-/// 
+///
 /// Pre Comments and Post Comments are allowed and parsed.
 pub fn parse_header_of_kind<'a, I, P, K, E>(
     mut target: Option<P>,
     param_length: Option<usize>,
-) -> impl Parser<I, Output = RawHeader<'a, K>, Error = RError>
+) -> impl Parser<I, Output = Commented<RawHeader<'a, K>>, Error = RError>
 where
     I: Input + std::fmt::Display + nom::Compare<&'static str> + nom::Offset,
     <I as Input>::Item: AsChar,
     &'a str: From<I>,
     for<'b> &'b str: FindToken<<I as Input>::Item>,
-    K: PartialEq<K> + Display + TryFrom<I>,
+    K: PartialEq<K> + Display + TryFrom<I> + std::fmt::Debug,
     <K as TryFrom<I>>::Error: StdError + Context,
     P: Parser<I, Output = K, Error = E>,
     E: nom::error::ParseError<I>,
-    nom::Err<RError>: From<nom::Err<E>>, Cow<'a, str>: From<I>, <I as Input>::Iter: DoubleEndedIterator
+    nom::Err<RError>: From<nom::Err<E>>,
+    Cow<'a, str>: From<I>,
+    <I as Input>::Iter: DoubleEndedIterator,
 {
-     move |input: I| {
-        
+    move |input: I| {
         let (input, pre_comments) = complete(parse_block_comment).parse(input)?;
-        
+
         let (input, (row_content, comment)) = complete(parse_commented_row).parse(input)?;
 
         let (items_str, block_kind) = if let Some(p) = &mut target {
@@ -174,20 +174,24 @@ where
             .collect::<Vec<_>>();
 
         let (input, _) = multispace0.parse(input)?;
-        
+
         let (input, post_comments) = parse_block_comment(input)?;
 
         Ok((
             input,
-            RawHeader {
-                block_kind,
-                items: converted_items,
-                comments: Comments{
-                    comment_pre: pre_comments.map(|v| v.into_iter().map(|i|i.to_string()).collect()),
-                    comment_inline: comment.map(|s| s.to_string()),
-                    comment_post: post_comments.map(|v| v.into_iter().map(|i|i.to_string()).collect()),
+            Commented::new(
+                RawHeader {
+                    block_kind,
+                    items: converted_items,
                 },
-            },
+                Comments {
+                    comment_pre: pre_comments
+                        .map(|v| v.into_iter().map(|i| i.to_string()).collect()),
+                    comment_inline: comment.map(|s| s.to_string()),
+                    comment_post: post_comments
+                        .map(|v| v.into_iter().map(|i| i.to_string()).collect()),
+                },
+            ),
         ))
         // Ok((remaining, header))
     }
@@ -261,7 +265,7 @@ mod tests {
             converted.unwrap()
         );
     }
-    
+
     #[test]
     fn test_multiple_lines() -> Result<(), RError> {
         let input = r#"

@@ -101,8 +101,8 @@ INPUTS 3
 *------------------------------------------------------------------------------
 
 EQUATIONS 2
-ABC   = max(90 - STOP,0)  !test
-CO2_Living               = -ACR_tot_Living*STEP * -1
+ABC   = max(90 - STOP,0)
+CO2_Living               = -ACR_tot_Living*STEP * -1 !aaa
 END
 *!LINK_STYLE
 *!LINK_STYLE_END

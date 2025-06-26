@@ -5,14 +5,14 @@ use crate::serialize::DeckWrite;
 use std::fmt::Write;
 
 impl DeckWrite for Version {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(writer, "{} {}", Self::block_kind(), self.version)?;
         Ok(())
     }
 }
 
 impl DeckWrite for Simulation {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(
             writer,
             "{} {} {} {}",
@@ -26,7 +26,7 @@ impl DeckWrite for Simulation {
 }
 
 impl DeckWrite for Tolerances {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(
             writer,
             "{} {} {}",
@@ -40,7 +40,7 @@ impl DeckWrite for Tolerances {
 }
 
 impl DeckWrite for Limits {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(writer, "{} ", Self::block_kind())?;
         self.max_iterations.write_to(writer, Self::block_kind())?;
         write!(writer, " ")?;
@@ -54,14 +54,14 @@ impl DeckWrite for Limits {
 }
 
 impl DeckWrite for UnitConnection {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(writer, "{},{}", self.unit, self.index)?;
         Ok(())
     }
 }
 
 impl DeckWrite for NanCheck {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(
             writer,
             "{} {}",
@@ -73,7 +73,7 @@ impl DeckWrite for NanCheck {
 }
 
 impl DeckWrite for OverwriteCheck {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(
             writer,
             "{} {}",
@@ -85,7 +85,7 @@ impl DeckWrite for OverwriteCheck {
 }
 
 impl DeckWrite for TimeReport {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(
             writer,
             "{} {}",
@@ -100,19 +100,13 @@ impl DeckWrite for EquationDef {
     fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
         write!(writer, " {} = ", self.name)?;
         self.expr.write_to(writer, kind)?;
-        write!(writer, "\n")?;
         Ok(())
     }
 }
 
 impl DeckWrite for Constants {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
-        write!(
-            writer,
-            "{} {}\n",
-            Self::block_kind(),
-            self.definitions.len()
-        )?;
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
+        writeln!(writer, "{} {}", Self::block_kind(), self.definitions.len())?;
         for def in &self.definitions {
             def.write_to(writer, Self::block_kind())?;
         }
@@ -122,22 +116,20 @@ impl DeckWrite for Constants {
 }
 
 impl DeckWrite for Equations {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
-        write!(
-            writer,
-            "{} {}\n",
-            Self::block_kind(),
-            self.definitions.len()
-        )?;
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
+        writeln!(writer, "{} {}", Self::block_kind(), self.definitions.len())?;
         for def in &self.definitions {
             def.write_to(writer, Self::block_kind())?;
+            if def.comments.is_empty() {
+                writeln!(writer)?;
+            }
         }
         Ok(())
     }
 }
 
 impl DeckWrite for Accelerate {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(writer, "{} {}", Self::block_kind(), self.outputs.len())?;
         for output in &self.outputs {
             write!(writer, " ")?;
@@ -148,7 +140,7 @@ impl DeckWrite for Accelerate {
 }
 
 impl DeckWrite for Loop {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(
             writer,
             "{} {} REPEAT {}",
@@ -164,14 +156,14 @@ impl DeckWrite for Loop {
 }
 
 impl DeckWrite for Dfq {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(writer, "{} {}", Self::block_kind(), self.method as u8)?;
         Ok(())
     }
 }
 
 impl DeckWrite for NoCheck {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(writer, "{} {}", Self::block_kind(), self.inputs.len())?;
         for input in &self.inputs {
             write!(writer, " ")?;
@@ -182,14 +174,14 @@ impl DeckWrite for NoCheck {
 }
 
 impl DeckWrite for EqSolver {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(writer, "EQSOLVER {}", self.method as u8)?;
         Ok(())
     }
 }
 
 impl DeckWrite for Solver {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(writer, "SOLVER {}", self.method as u8)?;
         if let Some(ref rf_min) = self.rf_min {
             write!(writer, " {}", rf_min)?;
@@ -202,14 +194,14 @@ impl DeckWrite for Solver {
 }
 
 impl DeckWrite for Assign {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(writer, "ASSIGN \"{}\" {}", self.filename, self.logical_unit)?;
         Ok(())
     }
 }
 
 impl DeckWrite for Designate {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(
             writer,
             "DESIGNATE \"{}\" {}",
@@ -220,21 +212,21 @@ impl DeckWrite for Designate {
 }
 
 impl DeckWrite for Include {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(writer, "INCLUDE \"{}\"", self.filename)?;
         Ok(())
     }
 }
 
 impl DeckWrite for End {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(writer, "END")?;
         Ok(())
     }
 }
 
 impl DeckWrite for Metadata {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         if let Some(ref unit_name) = self.unit_name {
             write!(writer, "*$UNIT_NAME {}\n", unit_name)?;
         }
@@ -269,7 +261,7 @@ impl DeckWrite for Format {
 }
 
 impl DeckWrite for Unit {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(
             writer,
             "{} {} TYPE {} {}\n",
@@ -331,7 +323,7 @@ impl DeckWrite for Unit {
 }
 
 impl DeckWrite for Width {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(writer, "{} {}", Self::block_kind(), self.0)?;
 
         Ok(())
@@ -339,28 +331,28 @@ impl DeckWrite for Width {
 }
 
 impl DeckWrite for NoList {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(writer, "{}", Self::block_kind())?;
         Ok(())
     }
 }
 
 impl DeckWrite for List {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(writer, "{}", Self::block_kind())?;
         Ok(())
     }
 }
 
 impl DeckWrite for Map {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(writer, "{}", Self::block_kind())?;
         Ok(())
     }
 }
 
 impl DeckWrite for CSummarize {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(
             writer,
             "{} \"{}\" \"{}\"",
@@ -373,7 +365,7 @@ impl DeckWrite for CSummarize {
 }
 
 impl DeckWrite for ESummarize {
-    fn write_to<W: Write>(&self, writer: &mut W, kind: BlockKind) -> Result<(), RError> {
+    fn write_to<W: Write>(&self, writer: &mut W, _kind: BlockKind) -> Result<(), RError> {
         write!(
             writer,
             "{} \"{}\" \"{}\"",

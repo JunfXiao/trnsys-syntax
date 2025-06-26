@@ -2,10 +2,7 @@ use crate::ast::{
     BinaryOperator, Commented, EquationDef, Expr, TrinaryOperator, UnaryOperator, UnitConnection,
 };
 use crate::error::{Error, ErrorScope, RError};
-use crate::parse::{
-    BlockKind, BlockParser, map_report, op_permutation, parse_block_comment, parse_commented_row,
-    parse_header_of_kind,
-};
+use crate::parse::{map_report, parse_block_comment, parse_commented_row};
 use nom::Parser;
 use nom::bytes::complete::take_while;
 use nom::bytes::tag_no_case;
@@ -458,16 +455,10 @@ fn equation_start(input: &str) -> IResult<&str, Expr, RError> {
 }
 
 /// Parses a complete equation block, including any preceding comments,
-/// the equation itself (name = expression), and optional CSummarize/ESummarize blocks.
+/// the equation itself (name = expression).
 fn parse_eq_block(input: &str) -> IResult<&str, Commented<EquationDef>, RError> {
     let (input, (comments_pre, eq_name, (content, comment_inline))) =
         (parse_block_comment, equation_start, parse_commented_row).parse(input)?;
-
-    let (input, (cs_header, es_header)) = op_permutation(
-        parse_header_of_kind(Some(BlockKind::CSummarize), Some(2)),
-        parse_header_of_kind(Some(BlockKind::ESummarize), Some(2)),
-    )
-    .parse(input)?;
 
     let eq_name = if let Expr::Identifier(name) = eq_name {
         name

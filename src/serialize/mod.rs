@@ -12,9 +12,6 @@ use std::fmt::{Debug, Write};
 use std::{fmt, io};
 
 use crate::parse::BlockKind;
-pub use block::*;
-pub use comment::*;
-pub use document::*;
 pub use expr::*;
 
 struct IoAdapter<'a, W>(&'a mut W);
@@ -78,7 +75,7 @@ pub trait DeckBinaryCodec<'a>: Serialize + Deserialize<'a> {
         Self: Debug,
         Self: Encode,
     {
-        bincode::encode_to_vec(self, bincode::config::standard()).map_err(|e| {
+        bincode::encode_to_vec(self, bincode::config::standard()).map_err(|_| {
             Error::ConversionError {
                 input: format!("{:?}", self),
                 target: "Binary".to_string(),
@@ -96,4 +93,12 @@ pub trait DeckBinaryCodec<'a>: Serialize + Deserialize<'a> {
 
         Ok(result)
     }
+}
+
+pub fn write_sep<W: Write>(writer: &mut W, content: Option<&str>) -> Result<(), RError> {
+    Ok(writeln!(
+        writer,
+        "\n* {}\n",
+        content.unwrap_or("-").repeat(50)
+    )?)
 }

@@ -7,9 +7,11 @@ pub mod serialize;
 use crate::ast::DocContext;
 use crate::error::{ParseResult, RError};
 use crate::parse::parse_commented_block;
+use crate::serialize::DeckWrite;
 use error_stack::Report;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -50,13 +52,12 @@ impl TrnsysFile {
     }
 
     /// Save the TRNSYS deck file to disk
-    pub fn save<P: AsRef<Path>>(&self, path: P) -> ParseResult<()> {
-        todo!();
-        // let content = self.ast.to_string();
-        // let path_str = path.as_ref().to_str().unwrap().to_string();
-        // fs::write(&path, content)
-        //     .map_err(|io_err| Report::new(io_err.into()))
-        //     .attach_printable(format!("Cannot save file to '{}'", path_str))
+    pub fn save<P: AsRef<Path>>(&self, path: P) -> ParseResult<(), RError> {
+        let mut file = fs::File::create(&path).map_err(|io_err| Report::new(io_err.into()))?;
+
+        self.ctx
+            .write_to_bytes(&mut file, parse::BlockKind::Unknown)
+            .map_err(|e| Report::new(e))
     }
 
     /// Convert the deck file to a string

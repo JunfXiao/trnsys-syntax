@@ -1,6 +1,7 @@
 use derive_more::{AsMut, AsRef, Constructor, Deref, DerefMut, Display};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display, Formatter};
+use std::ops::{Add, AddAssign};
 
 #[derive(Clone, Serialize, Deserialize, Default, Display)]
 #[display("Pre: {comment_pre:#?}, \nPost: {comment_post:#?}, Inline: \n{comment_inline:#?}")]
@@ -10,8 +11,6 @@ pub struct Comments {
     pub comment_post: Option<Vec<String>>,
 }
 
-pub trait CommentTrait {}
-
 impl Comments {
     pub fn with_inline<T>(comment_inline: Option<String>) -> Self {
         Self {
@@ -19,6 +18,10 @@ impl Comments {
             comment_pre: None,
             comment_post: None,
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.comment_inline.is_none() && self.comment_pre.is_none() && self.comment_post.is_none()
     }
 }
 
@@ -43,6 +46,42 @@ impl Debug for Comments {
             ds.finish()
         } else {
             write!(f, "<Empty>")
+        }
+    }
+}
+
+impl Add for Comments {
+    type Output = Self;
+
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl AddAssign for Comments {
+    fn add_assign(&mut self, rhs: Self) {
+        if let Some(inline) = rhs.comment_inline {
+            if self.comment_inline.is_none() {
+                self.comment_inline = Some(inline);
+            } else {
+                let original = self.comment_inline.take().unwrap_or_default();
+                self.comment_inline.replace(original + "\n" + &inline);
+            }
+        }
+        if let Some(pre) = rhs.comment_pre {
+            if self.comment_pre.is_none() {
+                self.comment_pre = Some(pre);
+            } else {
+                self.comment_pre.as_mut().unwrap().extend(pre);
+            }
+        }
+        if let Some(post) = rhs.comment_post {
+            if self.comment_post.is_none() {
+                self.comment_post = Some(post);
+            } else {
+                self.comment_post.as_mut().unwrap().extend(post);
+            }
         }
     }
 }

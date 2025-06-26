@@ -11,7 +11,6 @@ use nom::sequence::delimited;
 use nom::{AsChar, Compare, FindToken, IResult, Input, Offset, OutputMode, PResult, Parser};
 use std::fmt::{Debug, Display};
 
-
 /// Parse a comment that start with the given deliminator (e.g. `*` or `!`)  and end with a newline or `eof`.
 ///
 /// Return the comment as a trimmed string.
@@ -21,13 +20,14 @@ pub fn parse_comment_with<'a, I, E>(
 where
     I: Input + Compare<&'static str> + nom::Offset,
     <I as Input>::Item: AsChar,
-    E: nom::error::ParseError<I>, <I as Input>::Iter: DoubleEndedIterator
+    E: nom::error::ParseError<I>,
+    <I as Input>::Iter: DoubleEndedIterator,
 {
-    trim(delimited(
+    complete(trim(delimited(
         (multispace0, deliminator),
         recognize(not_line_ending),
         multispace0,
-    ))
+    )))
 }
 
 /// Handle the parsing of comments in a row. Return a trimmed tuple ` (Content, Comment)`.
@@ -45,7 +45,8 @@ where
     I: Input + nom::Offset + nom::Compare<&'static str>,
     <I as Input>::Item: AsChar,
     E: nom::error::ParseError<I>,
-    &'a str: FindToken<<I as Input>::Item>, <I as Input>::Iter: DoubleEndedIterator
+    &'a str: FindToken<<I as Input>::Item>,
+    <I as Input>::Iter: DoubleEndedIterator,
 {
     (
         trim(complete(recognize(many0(none_of::<I, &str, E>("!\n\r"))))),
@@ -63,7 +64,7 @@ where
     I: Input + Compare<&'static str> + Offset + Display,
     <I as Input>::Item: AsChar,
     E: nom::error::ParseError<I>,
-    <I as Input>::Iter: DoubleEndedIterator
+    <I as Input>::Iter: DoubleEndedIterator,
 {
     parse_block_comment_with(alt((tag("*"), tag("!")))).parse(input)
 }
@@ -77,8 +78,8 @@ pub fn parse_block_comment_with<'a, I, E>(
 where
     I: Input + Compare<&'static str> + nom::Offset,
     <I as Input>::Item: AsChar,
-    E: nom::error::ParseError<I>, 
-    <I as Input>::Iter: DoubleEndedIterator
+    E: nom::error::ParseError<I>,
+    <I as Input>::Iter: DoubleEndedIterator,
 {
     opt(many1(trim(parse_comment_with(deliminator))))
 }
@@ -97,7 +98,6 @@ impl CommentSplitter {
             min_length,
         }
     }
-
 
     /// Split a raw comment block into multiple lines based on the delimiter.
     /// The raw comment should begin with a `*` or `!` in each line.
@@ -135,6 +135,12 @@ impl CommentSplitter {
     }
 }
 
+impl Default for CommentSplitter {
+    fn default() -> Self {
+        Self::new('-', 10)
+    }
+}
+
 impl<'a> Parser<&'a str> for CommentSplitter {
     type Output = Option<Vec<Vec<&'a str>>>;
     type Error = RError;
@@ -151,7 +157,6 @@ impl<'a> Parser<&'a str> for CommentSplitter {
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     #[test]
     fn test_parse_comment_with() -> Result<(), RError> {
@@ -331,9 +336,9 @@ mod tests {
             assert_eq!(comments[0].len(), inputs.len());
         }
     }
-    
+
     #[test]
-    fn test_block_comment_unparsable() -> Result<(),RError>{
+    fn test_block_comment_unparsable() -> Result<(), RError> {
         let input = "* This is a comment\n* Another comment\nNEXTCOMPONENT";
         let (input, result) = parse_block_comment(input)?;
         assert_eq!(input, "NEXTCOMPONENT");
@@ -351,14 +356,14 @@ Some Contents
 ! Yet another comment
         "#;
         let (input, comments) = parse_block_comment(input)?;
-        assert!(input.trim().starts_with("Some Contents"), "Remaining input: '{}'", input);
+        assert!(
+            input.trim().starts_with("Some Contents"),
+            "Remaining input: '{}'",
+            input
+        );
         assert_eq!(
             comments,
-            Some(vec![
-                "This is a comment",
-                "This is another comment",
-                "",
-            ])
+            Some(vec!["This is a comment", "This is another comment", "",])
         );
         Ok(())
     }

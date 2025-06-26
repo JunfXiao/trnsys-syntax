@@ -1,8 +1,8 @@
 use super::{
-    BitBool, Block, BlockKind, BlockParser, DocContext, GlobalId, RawHeader, StrUnit, TryFromStr,
-    TypedBlock, parse_block_comment, parse_derivatives, parse_equations, parse_etrace,
-    parse_header, parse_inputs, parse_int, parse_labels, parse_literal_or_identifier,
-    parse_parameters, parse_trace, parse_unit_format,
+    BitBool, Block, BlockKind, BlockParser, CommentSplitter, DocContext, GlobalId, RawHeader,
+    StrUnit, TryFromStr, TypedBlock, parse_block_comment, parse_comment_with, parse_derivatives,
+    parse_equations, parse_etrace, parse_header, parse_inputs, parse_int, parse_labels,
+    parse_literal_or_identifier, parse_parameters, parse_trace, parse_unit_format,
 };
 use crate::ast::*;
 use crate::error::{ContentError, Error, RError, ReportWrapper};
@@ -11,9 +11,10 @@ use nom::Parser;
 use nom::branch::alt;
 use nom::bytes::tag;
 use nom::character::complete::{multispace0, space0};
-use nom::combinator::{complete, map};
+use nom::combinator::{complete, map, opt};
 use nom::multi::{many_m_n, many0, separated_list0};
 use nom::sequence::delimited;
+use std::mem;
 use std::rc::Rc;
 use strum::IntoEnumIterator;
 use uuid::Uuid;
@@ -23,15 +24,70 @@ pub fn parse_commented_block<'a>(
 ) -> IResult<&'a str, Block, RError> {
     let (input, context) = input;
 
-    let (input, before) = parse_block_comment.parse(input)?;
+    // Split the comment from previous block's post
+    let (input, comments_pre) = if let Some(prev) = context.prev_blocks.last() {
+        let mut prev = prev.borrow_mut();
+        let splitter = CommentSplitter::default();
+
+        let comment_post = prev.comments_mut().comment_post.take();
+        if let Some(rows) = comment_post {
+            let rows = rows.iter().map(String::as_str).collect::<Vec<_>>();
+
+            let mut splitted = splitter.split_lines(&rows).into_iter();
+            prev.comments_mut().comment_post = splitted
+                .next()
+                .map(|v| v.into_iter().map(Into::into).collect());
+
+            // recreate separators between Vec<Vec<_>> and join the Vec<Vec<_>> into a single Vec
+            // add ****** only between Vecs
+            let mut before = vec![];
+
+            for (i, vec) in splitted.enumerate() {
+                if i > 0 {
+                    before.push("* ".to_owned() + &*"-".repeat(15));
+                }
+                before.extend(vec.into_iter().map(Into::into));
+            }
+            (input, Some(before))
+        } else {
+            (input, None)
+        }
+    } else {
+        // Without previous block, read from the input directly
+
+        let (input, before) = parse_block_comment.parse(input)?;
+        (
+            input,
+            before.map(|v| v.into_iter().map(Into::into).collect()),
+        )
+    };
+
+    let input = input.trim();
+
+    let start_len = input.len();
+    let next_line_pos = input.find('\n').unwrap_or(usize::MAX);
     // Parse the block header
     let (input, mut block) = parse_block((input, context))?;
-    // Parse the block comment after the header
-    let (input, after) = parse_block_comment.parse(input)?;
+    let end_len = input.len();
 
-    let comments = block.comments_mut();
-    comments.comment_pre = before.map(|v| v.into_iter().map(Into::into).collect());
-    comments.comment_post = after.map(|v| v.into_iter().map(Into::into).collect());
+    // if it's a single line block, parse the inline comment
+    // single line block: next_line_pos is consumed (between the start and end)
+    let (input, comment_inline) = if start_len - end_len > next_line_pos {
+        opt(parse_comment_with(tag("!"))).parse(input)?
+    } else {
+        (input, None)
+    };
+
+    // Parse the block comment after the header
+    let (input, comments_post) = parse_block_comment.parse(input)?;
+
+    let outer_comments = Comments {
+        comment_pre: comments_pre,
+        comment_inline: comment_inline.map(|c| c.to_string()),
+        comment_post: comments_post.map(|v| v.into_iter().map(Into::into).collect()),
+    };
+
+    *block.comments_mut() += outer_comments;
 
     Ok((input, block))
 }
@@ -40,7 +96,15 @@ pub fn parse_block<'a>(input: (&'a str, &mut DocContext)) -> IResult<&'a str, Bl
     let (input, context) = input;
 
     let (input, block_header) = complete(parse_header).parse(input)?;
-    let (input, block) = Block::try_parse(input, block_header, context)?;
+
+    let header_comments = block_header.comments;
+    let header = block_header.value;
+
+    let (input, mut block) = Block::try_parse(input, header, context)?;
+    let block_comments = mem::take(block.comments_mut());
+
+    *block.comments_mut() = header_comments + block_comments;
+
     Ok((input, block))
 }
 
@@ -329,7 +393,7 @@ impl<'a> BlockParser<'a> for Constants {
 
 impl<'a> BlockParser<'a> for Equations {
     fn register(&self, context: &mut DocContext) -> Result<(), RError> {
-        let mut expr_names = vec![];
+        let expr_names = vec![];
         for expr in self.definitions.iter() {
             // check if the names are unique and announce dependencies at the same time
             let id = GlobalId::Variable(expr.name.to_string());
@@ -855,7 +919,7 @@ impl<'a> BlockParser<'a> for Unit {
             .and_then(|u| Ok(u.into_inner()))
             .unwrap_or_else(|e| e.borrow().clone());
 
-        let mut block = Commented::new(unit, raw_header.comments);
+        let mut block = Commented::from(unit);
 
         block.comments.comment_post =
             comments_post.map(|v| v.into_iter().map(Into::into).collect());
@@ -1005,5 +1069,66 @@ impl<'a> BlockParser<'a> for ESummarize {
             GlobalId::Block(Self::block_kind(), self.eq_name.clone()),
             Some(vec![GlobalId::Variable(self.eq_name.clone())]),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    #[test]
+    fn test_commented_block() -> Result<(), RError> {
+        let input = r#"
+* Hello
+ASSIGN test.txt 1
+* This is a test block belongs to the ASSIGN
+* ------------------------------------------------------------
+* This is a test block that belongs to the END
+END ! Inline comment
+* Post comment
+* ---------------------------------------------
+* Comment that should appear
+        "#;
+        let mut context = DocContext::new();
+        let (rest, assign_block) = parse_commented_block((input, &mut context))?;
+        let assign_block = Rc::new(RefCell::new(assign_block));
+        context.prev_blocks.push(assign_block.clone());
+        let (rest, end_block) = parse_commented_block((rest, &mut context))?;
+        assert_eq!(rest, "");
+
+        let assign_block = assign_block.borrow();
+        let assign_comments = assign_block.comments().clone();
+        let end_comments = end_block.comments().clone();
+        assert_eq!(assign_comments.comment_pre, Some(vec!["Hello".to_string()]));
+        assert_eq!(assign_comments.comment_inline, None);
+        assert_eq!(
+            assign_comments.comment_post,
+            Some(vec![
+                "This is a test block belongs to the ASSIGN".to_string()
+            ])
+        );
+
+        assert_eq!(
+            end_comments.comment_pre,
+            Some(vec![
+                "This is a test block that belongs to the END".to_string()
+            ])
+        );
+
+        assert_eq!(
+            end_comments.comment_inline,
+            Some("Inline comment".to_string())
+        );
+
+        assert_eq!(
+            end_comments.comment_post,
+            Some(vec![
+                "Post comment".to_string(),
+                "---------------------------------------------".to_string(),
+                "Comment that should appear".to_string()
+            ])
+        );
+        Ok(())
     }
 }

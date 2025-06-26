@@ -151,7 +151,7 @@ impl Expr {
 
     /// Get all dependency identifiers of the expression
     pub fn dependencies(&self) -> Vec<GlobalId> {
-        self.iter_tree().fold(vec![], |(mut ids), expr| {
+        self.iter_tree().fold(vec![], |mut ids, expr| {
             match expr {
                 Expr::Identifier(id) => ids.push(GlobalId::Variable(id.clone())),
                 Expr::UnitOutput(output) => ids.push(GlobalId::Unit(output.unit)),
