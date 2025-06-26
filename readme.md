@@ -13,8 +13,10 @@ support additional features such as validation, output generation, and more.
 # Roadmap
 - [x] TRNSYS 18 Read Support
 - [x] Tests
+- [x] Dependency Identification
 - [ ] Validation of references and expressions
-- [ ] Output Generation & Create from Zero
+- [x] Output Generation
+- [ ] Create from Scratch
 - [ ] TRNSEED Support
 - [ ] Benchmarks
 - [ ] Python Binding

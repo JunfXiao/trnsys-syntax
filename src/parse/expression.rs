@@ -10,6 +10,7 @@ use nom::Parser;
 use nom::bytes::complete::take_while;
 use nom::bytes::tag_no_case;
 use nom::character::complete::multispace0;
+use nom::combinator::complete;
 use nom::combinator::peek;
 use nom::combinator::{all_consuming, recognize};
 use nom::error::context;
@@ -148,7 +149,7 @@ macro_rules! keyword {
             value(
                 $op,
                 terminated(
-                    tag_no_case($op.as_ref()),
+                    complete(tag_no_case($op.as_ref())),
                     peek(preceded(multispace0, char('('))),
                 ),
             ),
@@ -567,13 +568,7 @@ mod tests {
     #[test]
     fn test_parse_expr() -> Result<(), RError> {
         let expr = "(a + b * c)d";
-        let result = parse_expr(expr);
-        assert!(
-            result.is_ok(),
-            "Failed to parse expression: {:?}",
-            result.err()
-        );
-        let (remaining, parsed_expr) = result.unwrap();
+        let (remaining, parsed_expr) = consume_expr(expr)?;
         assert_eq!(remaining, "");
         assert_eq!(
             parsed_expr,
@@ -597,19 +592,41 @@ mod tests {
     #[test]
     fn test_parse_unary() -> Result<(), RError> {
         let expr = "-a";
-        let result = consume_expr(expr);
-        assert!(
-            result.is_ok(),
-            "Failed to parse expression: {:?}",
-            result.err()
-        );
-        let (remaining, parsed_expr) = result.unwrap();
+        let (remaining, parsed_expr) = consume_expr(expr)?;
+
         assert_eq!(remaining, "");
         assert_eq!(
             parsed_expr,
             UnaryOp {
                 op: UnaryOperator::Negate,
                 expr: Box::new(Identifier("a".to_string())),
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_pred() -> Result<(), RError> {
+        let expr = "-a+b*c^d";
+        let (remaining, parsed_expr) = consume_expr(expr)?;
+        assert_eq!(remaining, "");
+        assert_eq!(
+            parsed_expr,
+            BinaryOp {
+                op: BinaryOperator::Add,
+                first: Box::new(UnaryOp {
+                    op: UnaryOperator::Negate,
+                    expr: Box::new(Identifier("a".to_string())),
+                }),
+                second: Box::new(BinaryOp {
+                    op: BinaryOperator::Multiply,
+                    first: Box::new(Identifier("b".to_string())),
+                    second: Box::new(BinaryOp {
+                        op: BinaryOperator::Power,
+                        first: Box::new(Identifier("c".to_string())),
+                        second: Box::new(Identifier("d".to_string())),
+                    }),
+                }),
             }
         );
         Ok(())
@@ -626,11 +643,11 @@ mod tests {
         );
         assert_eq!(
             result,
-            UnaryOp {
-                op: UnaryOperator::Negate,
-                expr: Box::new(BinaryOp {
-                    op: BinaryOperator::Multiply,
-                    first: Box::new(UnaryOp {
+            BinaryOp {
+                op: BinaryOperator::Multiply,
+                first: Box::new(UnaryOp {
+                    op: UnaryOperator::Negate,
+                    expr: Box::new(UnaryOp {
                         op: UnaryOperator::Exp,
                         expr: Box::new(BinaryOp {
                             op: BinaryOperator::Add,
@@ -638,21 +655,21 @@ mod tests {
                             second: Box::new(Identifier("b".to_string())),
                         }),
                     }),
-                    second: Box::new(UnaryOp {
-                        op: UnaryOperator::Negate,
-                        expr: Box::new(BinaryOp {
-                            op: BinaryOperator::Multiply,
-                            first: Box::new(Identifier("c".to_string())),
-                            second: Box::new(UnaryOp {
-                                op: UnaryOperator::Int,
-                                expr: Box::new(BinaryOp {
-                                    op: BinaryOperator::Multiply,
-                                    first: Box::new(Identifier("d".to_string())),
-                                    second: Box::new(Identifier("e".to_string())),
-                                }),
-                            }),
+                }),
+                second: Box::new(BinaryOp {
+                    op: BinaryOperator::Multiply,
+                    first: Box::new(BinaryOp {
+                        op: BinaryOperator::Multiply,
+                        first: Box::new(UnaryOp {
+                            op: UnaryOperator::Negate,
+                            expr: Box::new(Identifier("c".to_string())),
+                        }),
+                        second: Box::new(UnaryOp {
+                            op: UnaryOperator::Int,
+                            expr: Box::new(Identifier("d".to_string())),
                         }),
                     }),
+                    second: Box::new(Identifier("e".to_string()))
                 }),
             }
         );
