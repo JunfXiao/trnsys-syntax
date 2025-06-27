@@ -1,5 +1,6 @@
 use crate::error::{ContentError, RError};
 use crate::parse::{Block, BlockKind};
+use crate::serialize::{DeckBinaryCodec, DeckJsonCodec};
 use derive_more::Unwrap;
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -67,6 +68,7 @@ pub struct DocContext {
     /// The hashmap of dependencies.
     ///
     /// The key is the id of the block, and the value is a set of ids that this block depends on.
+    #[serde(skip_serializing)]
     dependencies: HashMap<GlobalId, HashSet<GlobalId>>,
     /// The set of reserved global ids.
     reserved_ids: HashSet<GlobalId>,
@@ -165,6 +167,10 @@ impl<'a> DocContext {
         &mut self.dependencies
     }
 }
+
+impl DeckJsonCodec<'_> for DocContext {}
+
+impl DeckBinaryCodec<'_> for DocContext {}
 
 fn serialize_vec_rc_refcell<T, S>(
     vec: &Vec<Rc<RefCell<T>>>,

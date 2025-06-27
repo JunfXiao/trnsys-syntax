@@ -4,15 +4,15 @@ mod document;
 mod expr;
 
 use crate::error::{Error, RError};
+use crate::parse::BlockKind;
 use bincode;
 use bincode::{Decode, Encode};
+use error_stack::Report;
+pub use expr::*;
 use serde::{Deserialize, Serialize};
 use std::any::type_name;
 use std::fmt::{Debug, Write};
 use std::{fmt, io};
-
-use crate::parse::BlockKind;
-pub use expr::*;
 
 struct IoAdapter<'a, W>(&'a mut W);
 
@@ -42,26 +42,45 @@ pub trait DeckWrite: Sized {
 }
 
 pub trait DeckJsonCodec<'a>: Serialize + Deserialize<'a> {
-    fn as_json(&self) -> Result<String, RError>
-    where
-        Self: Debug,
-    {
+    fn as_json(&self) -> Result<String, RError> {
         serde_json::to_string(self).map_err(|e| {
+            Report::from(e)
+                .change_context(Error::ConversionError {
+                    input: type_name::<Self>().to_string(),
+                    target: "JSON".to_string(),
+                })
+                .into()
+        })
+    }
+
+    fn from_json(s: &'a str) -> Result<Self, RError> {
+        serde_json::from_str(s).map_err(|e| {
             Error::ConversionError {
-                input: format!("{:?}", self),
-                target: "JSON".to_string(),
+                input: "Json Content".to_string(),
+                target: type_name::<Self>().to_string(),
             }
             .into()
         })
     }
 
-    fn from_json(s: &'a str) -> Result<Self, RError>
+    fn as_yaml(&self) -> Result<String, RError> {
+        serde_yaml::to_string(self).map_err(|e| {
+            Report::from(e)
+                .change_context(Error::ConversionError {
+                    input: type_name::<Self>().to_string(),
+                    target: "YAML".to_string(),
+                })
+                .into()
+        })
+    }
+
+    fn from_yaml(s: &'a str) -> Result<Self, RError>
     where
         Self: Sized,
     {
-        serde_json::from_str(s).map_err(|e| {
+        serde_yaml::from_str(s).map_err(|e| {
             Error::ConversionError {
-                input: format!("JSON Content `{}`", s),
+                input: "YAML Content".to_string(),
                 target: type_name::<Self>().to_string(),
             }
             .into()
@@ -72,12 +91,11 @@ pub trait DeckJsonCodec<'a>: Serialize + Deserialize<'a> {
 pub trait DeckBinaryCodec<'a>: Serialize + Deserialize<'a> {
     fn as_binary(&self) -> Result<Vec<u8>, RError>
     where
-        Self: Debug,
         Self: Encode,
     {
         bincode::encode_to_vec(self, bincode::config::standard()).map_err(|_| {
             Error::ConversionError {
-                input: format!("{:?}", self),
+                input: type_name::<Self>().to_string(),
                 target: "Binary".to_string(),
             }
             .into()

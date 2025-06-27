@@ -29,7 +29,7 @@ impl DeckWrite for Expr {
                     write!(writer, ")")?;
                 } else {
                     first.write_to(writer, kind)?;
-                    write!(writer, " {}", op)?;
+                    write!(writer, " {} ", op)?;
                     second.write_to(writer, kind)?;
                 }
             }

@@ -93,6 +93,7 @@ pub struct Commented<T: Debug> {
     #[deref]
     #[deref_mut]
     pub value: T,
+    #[serde(flatten)]
     pub comments: Comments,
 }
 
