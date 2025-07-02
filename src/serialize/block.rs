@@ -276,6 +276,7 @@ impl DeckWrite for Unit {
         if let Some(ref parameters) = self.parameters {
             write!(writer, "PARAMETERS {}\n", parameters.len())?;
             for param in parameters {
+                write!(writer, "\t")?;
                 param.write_to(writer, Self::block_kind())?;
             }
         }
@@ -283,10 +284,12 @@ impl DeckWrite for Unit {
         if let Some(ref inputs) = self.inputs {
             write!(writer, "INPUTS {}\n", inputs.len())?;
             for input in inputs {
+                write!(writer, "\t")?;
                 input.connection.write_to(writer, Self::block_kind())?;
             }
             write!(writer, "*** INITIAL INPUT VALUES\n")?;
             for input in inputs {
+                write!(writer, "\t")?;
                 input.initial.write_to(writer, Self::block_kind())?;
             }
         }
@@ -294,7 +297,7 @@ impl DeckWrite for Unit {
         if let Some(ref labels) = self.labels {
             write!(writer, "LABELS {}\n", labels.len())?;
             for label in labels {
-                write!(writer, " ")?;
+                write!(writer, "\t")?;
                 label.write_to(writer, Self::block_kind())?;
             }
         }
@@ -302,6 +305,7 @@ impl DeckWrite for Unit {
         if let Some(ref derivatives) = self.derivatives {
             write!(writer, "DERIVATIVES {}\n", derivatives.len())?;
             for derivative in derivatives {
+                write!(writer, "\t")?;
                 derivative.write_to(writer, Self::block_kind())?;
             }
         }

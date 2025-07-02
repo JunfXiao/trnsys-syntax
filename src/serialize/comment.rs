@@ -29,9 +29,13 @@ where
         }
         // Write the main value
         self.value.write_to(writer, kind)?;
+
+        let mut has_inline = false;
+
         // Write inline comment if it exists
         if let Some(inline) = &self.comments.comment_inline {
             writeln!(writer, "\t! {}", inline.trim())?;
+            has_inline = true;
         }
         // Write post-comments if they exist
         if let Some(post) = &self.comments.comment_post {
@@ -41,7 +45,11 @@ where
             for line in post {
                 write_comment_line(writer, line)?;
             }
+        } else if !has_inline {
+            // Without inline and post comments, ensure the separator is written
+            write!(writer, "\t")?;
         }
+
         Ok(())
     }
 }
